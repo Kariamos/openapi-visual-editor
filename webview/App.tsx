@@ -344,6 +344,7 @@ export function App(): React.ReactElement {
                 operation={currentOperation}
                 onChange={(op) => handleOperationChange(selectedPath, selectedMethod, op)}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
+                availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
               />
             ) : (
               <div style={styles.emptyState}>
