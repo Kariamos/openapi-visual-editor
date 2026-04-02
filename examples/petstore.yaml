@@ -1,8 +1,8 @@
-openapi: "3.0.3"
+openapi: 3.0.3
 info:
   title: Petstore API
   description: A sample API that uses a petstore as an example
-  version: "1.0.0"
+  version: 1.0.0
 servers:
   - url: https://petstore.example.com/v1
     description: Production server
@@ -51,6 +51,9 @@ paths:
           description: Pet created
         "400":
           description: Invalid input
+      parameters: []
+      security:
+        - bearerAuth: []
   /pets/{petId}:
     get:
       summary: Info for a specific pet
@@ -90,7 +93,14 @@ paths:
           description: Pet deleted
         "404":
           description: Pet not found
+      security:
+        - bearerAuth: []
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     Pet:
       type: object

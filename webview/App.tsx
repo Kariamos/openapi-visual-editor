@@ -53,6 +53,7 @@ export interface OpenApiOperation {
     content: Record<string, { schema?: OpenApiSchema }>;
   };
   responses: Record<string, OpenApiResponse>;
+  security?: Array<Record<string, string[]>>;
   [key: string]: unknown;
 }
 
@@ -342,6 +343,7 @@ export function App(): React.ReactElement {
                 method={selectedMethod}
                 operation={currentOperation}
                 onChange={(op) => handleOperationChange(selectedPath, selectedMethod, op)}
+                availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
               />
             ) : (
               <div style={styles.emptyState}>

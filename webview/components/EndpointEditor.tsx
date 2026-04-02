@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, OpenApiSchema, HttpMethod } from '../App';
+import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, HttpMethod } from '../App';
 
 // ─── Method color map ───────────────────────────────────────────────────────
 
@@ -161,6 +161,7 @@ interface EndpointEditorProps {
   method: HttpMethod;
   operation: OpenApiOperation;
   onChange: (operation: OpenApiOperation) => void;
+  availableSchemes?: string[];
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -170,12 +171,14 @@ export function EndpointEditor({
   method,
   operation,
   onChange,
+  availableSchemes = [],
 }: EndpointEditorProps): React.ReactElement {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     general: true,
     parameters: true,
     requestBody: false,
     responses: true,
+    security: true,
   });
 
   const toggleSection = (section: string) => {
@@ -248,6 +251,24 @@ export function EndpointEditor({
       updateField('responses', responses);
     },
     [operation.responses, updateField]
+  );
+
+  // ── Security ─────────────────────────────────────────────────────────────
+
+  const activeSchemes = (operation.security ?? []).map((s) => Object.keys(s)[0]).filter(Boolean);
+
+  const toggleScheme = useCallback(
+    (scheme: string, enabled: boolean) => {
+      const current = operation.security ?? [];
+      let updated: Array<Record<string, string[]>>;
+      if (enabled) {
+        updated = [...current, { [scheme]: [] }];
+      } else {
+        updated = current.filter((s) => Object.keys(s)[0] !== scheme);
+      }
+      onChange({ ...operation, security: updated.length > 0 ? updated : undefined });
+    },
+    [operation, onChange]
   );
 
   // ── Tags ────────────────────────────────────────────────────────────────
@@ -377,6 +398,36 @@ export function EndpointEditor({
             />
           ))}
       </div>
+
+      {/* Security section */}
+      {availableSchemes.length > 0 && (
+        <div style={styles.section}>
+          <div
+            style={{ ...styles.sectionTitle, ...styles.collapsible }}
+            onClick={() => toggleSection('security')}
+          >
+            <span>{expandedSections.security ? '▾' : '▸'} Security</span>
+          </div>
+          {expandedSections.security && (
+            <div style={styles.card}>
+              {availableSchemes.map((scheme) => (
+                <label
+                  key={scheme}
+                  style={{ ...styles.label, display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginBottom: 8 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={activeSchemes.includes(scheme)}
+                    onChange={(e) => toggleScheme(scheme, e.target.checked)}
+                    style={styles.checkbox}
+                  />
+                  {scheme}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Responses section */}
       <div style={styles.section}>
