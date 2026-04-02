@@ -39,9 +39,23 @@ export interface OpenApiSchema {
   [key: string]: unknown;
 }
 
+export interface OpenApiExample {
+  summary?: string;
+  description?: string;
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+export interface OpenApiMediaType {
+  schema?: OpenApiSchema;
+  example?: unknown;
+  examples?: Record<string, OpenApiExample>;
+  [key: string]: unknown;
+}
+
 export interface OpenApiResponse {
   description: string;
-  content?: Record<string, { schema?: OpenApiSchema }>;
+  content?: Record<string, OpenApiMediaType>;
   [key: string]: unknown;
 }
 
@@ -54,7 +68,7 @@ export interface OpenApiOperation {
   requestBody?: {
     description?: string;
     required?: boolean;
-    content: Record<string, { schema?: OpenApiSchema }>;
+    content: Record<string, OpenApiMediaType>;
   };
   responses: Record<string, OpenApiResponse>;
   security?: Array<Record<string, string[]>>;
@@ -349,6 +363,8 @@ export function App(): React.ReactElement {
                 onChange={(op) => handleOperationChange(selectedPath, selectedMethod, op)}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
                 availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
+                components={doc.components?.schemas ?? {}}
+                servers={doc.servers ?? []}
               />
             ) : (
               <div style={styles.emptyState}>

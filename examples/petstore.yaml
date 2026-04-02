@@ -74,6 +74,16 @@ paths:
               required:
                 - newProperty1
                 - newProperty
+            examples:
+              default:
+                summary: Default example
+                value:
+                  newProperty:
+                    name: Fido
+                    tag: dog
+                    ownerId: 1000000
+                  newProperty1:
+                    newProperty: string
       responses:
         "201":
           description: Pet created successfully

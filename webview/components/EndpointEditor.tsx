@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, HttpMethod } from '../App';
+import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, OpenApiSchema, HttpMethod } from '../App';
 import { ContentBodyEditor } from './SchemaEditor';
+import { ExamplesEditor } from './ExamplesEditor';
 
 // ─── Method color map ───────────────────────────────────────────────────────
 
@@ -164,6 +165,8 @@ interface EndpointEditorProps {
   onChange: (operation: OpenApiOperation) => void;
   availableSchemes?: string[];
   availableRefs?: string[];
+  components?: Record<string, OpenApiSchema>;
+  servers?: Array<{ url: string; description?: string }>;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -175,6 +178,8 @@ export function EndpointEditor({
   onChange,
   availableSchemes = [],
   availableRefs = [],
+  components = {},
+  servers = [],
 }: EndpointEditorProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState('general');
 
@@ -306,6 +311,7 @@ export function EndpointEditor({
     { id: 'parameters', label: 'Parameters', count: operation.parameters?.length ?? 0 },
     ...(showRequestBodyTab ? [{ id: 'requestBody', label: 'Request Body' }] : []),
     { id: 'responses', label: 'Responses', count: Object.keys(operation.responses ?? {}).length },
+    { id: 'examples', label: 'Examples' },
     ...(availableSchemes.length > 0 ? [{ id: 'security', label: 'Security' }] : []),
   ];
 
@@ -513,6 +519,18 @@ export function EndpointEditor({
             />
           ))}
         </div>
+      )}
+
+      {/* ── Examples ── */}
+      {activeTab === 'examples' && (
+        <ExamplesEditor
+          operation={operation}
+          onChange={onChange}
+          method={method}
+          path={path}
+          servers={servers}
+          components={components}
+        />
       )}
 
       {/* ── Security ── */}
