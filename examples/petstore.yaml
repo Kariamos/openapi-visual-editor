@@ -58,7 +58,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NewPet"
+              type: object
+              properties:
+                newProperty:
+                  $ref: "#/components/schemas/NewPet"
+                newProperty1:
+                  allOf:
+                    - type: number
+                      format: double
+                      description: lll
+                    - type: object
+                      properties:
+                        newProperty:
+                          type: string
+              required:
+                - newProperty1
+                - newProperty
       responses:
         "201":
           description: Pet created successfully

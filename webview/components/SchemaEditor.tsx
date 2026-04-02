@@ -3,11 +3,17 @@ import type { OpenApiSchema } from '../App';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['string', 'integer', 'number', 'boolean', 'object', 'array', '$ref'];
-const LEAF_TYPES = ['string', 'integer', 'number', 'boolean', '$ref'];
+const PRIMITIVE_TYPES = ['string', 'integer', 'number', 'boolean'];
+// All types allowed at any level (including top-level and depth-0 properties)
+const ALL_TYPES = [...PRIMITIVE_TYPES, 'object', 'array', '$ref', 'allOf', 'oneOf', 'anyOf', 'not'];
+// Leaf types allowed inside deeply nested schemas (no further composition)
+const LEAF_TYPES = [...PRIMITIVE_TYPES, 'object', 'array', '$ref'];
+
+const COMPOSITION_KEYWORDS = ['allOf', 'oneOf', 'anyOf'] as const;
+type CompositionKeyword = typeof COMPOSITION_KEYWORDS[number];
 
 const FORMAT_MAP: Record<string, string[]> = {
-  string: ['', 'date', 'date-time', 'email', 'uuid', 'uri', 'password', 'byte', 'binary'],
+  string: ['', 'date', 'date-time', 'email', 'uuid', 'uri', 'password', 'byte', 'binary', 'hostname'],
   integer: ['', 'int32', 'int64'],
   number: ['', 'float', 'double'],
 };
@@ -24,16 +30,30 @@ const COMMON_CONTENT_TYPES = [
 
 function getDisplayType(schema: OpenApiSchema): string {
   if (schema.$ref) return '$ref';
+  if (schema.allOf) return 'allOf';
+  if (schema.oneOf) return 'oneOf';
+  if (schema.anyOf) return 'anyOf';
+  if (schema.not) return 'not';
   return schema.type ?? 'string';
 }
 
 function initSchema(type: string, refs: string[]): OpenApiSchema {
+  const first = refs[0] ?? '#/components/schemas/';
+  const second = refs[1] ?? first;
   switch (type) {
-    case '$ref': return { $ref: refs[0] ?? '#/components/schemas/' };
+    case '$ref':   return { $ref: first };
     case 'object': return { type: 'object', properties: {} };
-    case 'array': return { type: 'array', items: { type: 'string' } };
-    default: return { type };
+    case 'array':  return { type: 'array', items: { type: 'string' } };
+    case 'allOf':  return { allOf: [{ $ref: first }, { type: 'object', properties: {} }] };
+    case 'oneOf':  return { oneOf: [{ $ref: first }, { $ref: second }] };
+    case 'anyOf':  return { anyOf: [{ type: 'string' }, { type: 'integer' }] };
+    case 'not':    return { not: { type: 'string' } };
+    default:       return { type };
   }
+}
+
+function isComplex(displayType: string): boolean {
+  return ['object', 'array', 'allOf', 'oneOf', 'anyOf', 'not'].includes(displayType);
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -105,7 +125,7 @@ const ms = {
     borderBottom: '1px solid var(--vscode-widget-border, #2d2d2d)',
   },
   nested: {
-    marginTop: 4,
+    marginTop: 6,
     marginBottom: 6,
     paddingLeft: 14,
     borderLeft: '2px solid var(--vscode-widget-border, #3d3d3d)',
@@ -126,6 +146,31 @@ const ms = {
     marginBottom: 0,
     display: 'block',
   },
+  compositionCard: {
+    border: '1px solid var(--vscode-widget-border, #444)',
+    borderRadius: 4,
+    padding: '10px 12px',
+    marginBottom: 8,
+    background: 'var(--vscode-editor-background, #1e1e1e)',
+  },
+  keywordBadge: (kw: string) => {
+    const colors: Record<string, string> = {
+      allOf: '#0e639c',
+      oneOf: '#6f42c1',
+      anyOf: '#1a7340',
+      not:   '#b91c1c',
+    };
+    return {
+      display: 'inline-block',
+      fontSize: '10px',
+      fontWeight: 700 as const,
+      padding: '2px 7px',
+      borderRadius: 3,
+      background: colors[kw] ?? '#4d4d4d',
+      color: '#fff',
+      letterSpacing: '0.3px',
+    };
+  },
 };
 
 function tabStyle(active: boolean): React.CSSProperties {
@@ -139,6 +184,42 @@ function tabStyle(active: boolean): React.CSSProperties {
     cursor: 'pointer',
     fontWeight: active ? 600 : 400,
   };
+}
+
+// ─── Type select (grouped) ────────────────────────────────────────────────────
+
+function TypeSelect({
+  value,
+  onChange,
+  allowedTypes,
+}: {
+  value: string;
+  onChange: (t: string) => void;
+  allowedTypes: string[];
+}): React.ReactElement {
+  const primitives = PRIMITIVE_TYPES.filter(t => allowedTypes.includes(t));
+  const complex = ['object', 'array', '$ref'].filter(t => allowedTypes.includes(t));
+  const composition = ['allOf', 'oneOf', 'anyOf', 'not'].filter(t => allowedTypes.includes(t));
+
+  return (
+    <select style={ms.select} value={value} onChange={e => onChange(e.target.value)}>
+      {primitives.length > 0 && (
+        <optgroup label="Primitive">
+          {primitives.map(t => <option key={t} value={t}>{t}</option>)}
+        </optgroup>
+      )}
+      {complex.length > 0 && (
+        <optgroup label="Complex">
+          {complex.map(t => <option key={t} value={t}>{t}</option>)}
+        </optgroup>
+      )}
+      {composition.length > 0 && (
+        <optgroup label="Composition">
+          {composition.map(t => <option key={t} value={t}>{t}</option>)}
+        </optgroup>
+      )}
+    </select>
+  );
 }
 
 // ─── SchemaEditor ─────────────────────────────────────────────────────────────
@@ -155,23 +236,26 @@ export function SchemaEditor({
   depth?: number;
 }): React.ReactElement {
   const displayType = getDisplayType(schema);
-  const types = depth >= 2 ? LEAF_TYPES : ALL_TYPES;
+  const allowedTypes = depth >= 2 ? LEAF_TYPES : ALL_TYPES;
+
+  const setType = (t: string) => {
+    const next = initSchema(t, availableRefs);
+    if (schema.description) next.description = schema.description;
+    onChange(next);
+  };
+
+  const isComposition = ['allOf', 'oneOf', 'anyOf'].includes(displayType);
 
   return (
     <div>
-      {/* Type + format + $ref row */}
+      {/* Type row */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <label style={ms.label}>Type</label>
-          <select
-            style={ms.select}
-            value={displayType}
-            onChange={e => onChange(initSchema(e.target.value, availableRefs))}
-          >
-            {types.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <TypeSelect value={displayType} onChange={setType} allowedTypes={allowedTypes} />
         </div>
 
+        {/* $ref selector */}
         {displayType === '$ref' && (
           <div style={{ flex: 1 }}>
             <label style={ms.label}>Reference</label>
@@ -196,6 +280,7 @@ export function SchemaEditor({
           </div>
         )}
 
+        {/* Format for primitives */}
         {FORMAT_MAP[displayType] && (
           <div>
             <label style={ms.label}>Format</label>
@@ -204,16 +289,14 @@ export function SchemaEditor({
               value={schema.format ?? ''}
               onChange={e => onChange({ ...schema, format: e.target.value || undefined })}
             >
-              {FORMAT_MAP[displayType].map(f => (
-                <option key={f} value={f}>{f || '—'}</option>
-              ))}
+              {FORMAT_MAP[displayType].map(f => <option key={f} value={f}>{f || '—'}</option>)}
             </select>
           </div>
         )}
       </div>
 
-      {/* Description + example */}
-      {displayType !== '$ref' && (
+      {/* Description + example (for non-composition non-ref types) */}
+      {!isComposition && displayType !== 'not' && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <div style={{ flex: 3 }}>
             <label style={ms.label}>Description</label>
@@ -224,7 +307,7 @@ export function SchemaEditor({
               placeholder="Schema description…"
             />
           </div>
-          {displayType !== 'object' && displayType !== 'array' && (
+          {!isComplex(displayType) && displayType !== '$ref' && (
             <div style={{ flex: 2 }}>
               <label style={ms.label}>Example</label>
               <input
@@ -238,7 +321,7 @@ export function SchemaEditor({
         </div>
       )}
 
-      {/* Object: properties editor */}
+      {/* Object properties */}
       {displayType === 'object' && (
         <ObjectPropertiesEditor
           schema={schema}
@@ -248,7 +331,7 @@ export function SchemaEditor({
         />
       )}
 
-      {/* Array: items schema */}
+      {/* Array items */}
       {displayType === 'array' && (
         <div>
           <div style={ms.sectionHeader}>Items Schema</div>
@@ -262,6 +345,111 @@ export function SchemaEditor({
           </div>
         </div>
       )}
+
+      {/* allOf / oneOf / anyOf */}
+      {isComposition && (
+        <CompositionEditor
+          keyword={displayType as CompositionKeyword}
+          schemas={(schema[displayType] as OpenApiSchema[]) ?? []}
+          onChange={schemas => onChange({ ...schema, [displayType]: schemas })}
+          availableRefs={availableRefs}
+          depth={depth}
+        />
+      )}
+
+      {/* not */}
+      {displayType === 'not' && (
+        <div>
+          <div style={ms.sectionHeader}>Schema that must NOT match</div>
+          <div style={ms.nested}>
+            <SchemaEditor
+              schema={schema.not ?? { type: 'string' }}
+              onChange={not => onChange({ not })}
+              availableRefs={availableRefs}
+              depth={depth + 1}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CompositionEditor ────────────────────────────────────────────────────────
+
+const COMPOSITION_DESCRIPTIONS: Record<CompositionKeyword, string> = {
+  allOf: 'Must match ALL of these schemas (use to extend/merge models)',
+  oneOf: 'Must match exactly ONE of these schemas (discriminated union)',
+  anyOf: 'Must match at least ONE of these schemas',
+};
+
+function CompositionEditor({
+  keyword,
+  schemas,
+  onChange,
+  availableRefs,
+  depth,
+}: {
+  keyword: CompositionKeyword;
+  schemas: OpenApiSchema[];
+  onChange: (schemas: OpenApiSchema[]) => void;
+  availableRefs: string[];
+  depth: number;
+}): React.ReactElement {
+  const addSchema = () => {
+    const newEntry: OpenApiSchema =
+      availableRefs.length > 0 ? { $ref: availableRefs[0] } : { type: 'object', properties: {} };
+    onChange([...schemas, newEntry]);
+  };
+
+  const updateSchema = (idx: number, s: OpenApiSchema) => {
+    const updated = [...schemas];
+    updated[idx] = s;
+    onChange(updated);
+  };
+
+  const removeSchema = (idx: number) => {
+    onChange(schemas.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div>
+      {/* Header with keyword badge and hint */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, marginTop: 4 }}>
+        <span style={ms.keywordBadge(keyword)}>{keyword}</span>
+        <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #888)' }}>
+          {COMPOSITION_DESCRIPTIONS[keyword]}
+        </span>
+      </div>
+
+      {schemas.map((s, idx) => (
+        <div key={idx} style={ms.compositionCard}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #888)' }}>
+              Schema {idx + 1}
+              {s.$ref && (
+                <span style={{ marginLeft: 6, color: 'var(--vscode-textLink-foreground, #3794ff)' }}>
+                  → {s.$ref.replace('#/components/schemas/', '')}
+                </span>
+              )}
+              {s.type && !s.$ref && (
+                <span style={{ marginLeft: 6 }}>{s.type}</span>
+              )}
+            </span>
+            {schemas.length > 1 && (
+              <button style={ms.removeBtn} onClick={() => removeSchema(idx)} title="Remove schema">×</button>
+            )}
+          </div>
+          <SchemaEditor
+            schema={s}
+            onChange={updated => updateSchema(idx, updated)}
+            availableRefs={availableRefs}
+            depth={depth + 1}
+          />
+        </div>
+      ))}
+
+      <button style={ms.addBtn} onClick={addSchema}>+ Add Schema</button>
     </div>
   );
 }
@@ -329,7 +517,7 @@ function ObjectPropertiesEditor({
       {hasProps && (
         <div style={{ display: 'flex', gap: 5, padding: '0 0 3px 21px', marginBottom: 2 }}>
           <span style={{ ...ms.colHeader, width: 120, flexShrink: 0 }}>Name</span>
-          <span style={{ ...ms.colHeader, width: 80, flexShrink: 0 }}>Type</span>
+          <span style={{ ...ms.colHeader, width: 88, flexShrink: 0 }}>Type</span>
           <span style={{ ...ms.colHeader, width: 72, flexShrink: 0 }}>Format</span>
           <span style={{ ...ms.colHeader, flex: 1 }}>Description</span>
           <span style={{ ...ms.colHeader, width: 28, flexShrink: 0 }} title="Required">Req</span>
@@ -381,24 +569,31 @@ function PropertyRow({
   const [expanded, setExpanded] = useState(false);
   const [localName, setLocalName] = useState(name);
   const displayType = getDisplayType(schema);
-  const isComplex = displayType === 'object' || displayType === 'array';
+  const complex = isComplex(displayType);
   const childTypes = depth >= 1 ? LEAF_TYPES : ALL_TYPES;
 
-  // Sync localName if prop is renamed externally
   useEffect(() => { setLocalName(name); }, [name]);
 
   const handleTypeChange = (t: string) => {
-    onSchemaChange({ ...initSchema(t, availableRefs), description: schema.description });
+    const next = initSchema(t, availableRefs);
+    if (schema.description) next.description = schema.description;
+    onSchemaChange(next);
   };
+
+  // For the inline row, show format only for primitives that have formats
+  // For complex/composition types show a type indicator instead
+  const showFormat = !!FORMAT_MAP[displayType];
+  const showRef = displayType === '$ref';
+  const showInlineDesc = !showRef && !complex;
 
   return (
     <div>
       <div style={ms.propRow}>
-        {/* Expand toggle (visible only for complex types) */}
+        {/* Expand toggle */}
         <button
-          style={{ ...ms.expandBtn, visibility: isComplex ? 'visible' : 'hidden' }}
+          style={{ ...ms.expandBtn, visibility: complex ? 'visible' : 'hidden' }}
           onClick={() => setExpanded(e => !e)}
-          title="Expand nested schema"
+          title="Expand"
         >
           {expanded ? '▾' : '▸'}
         </button>
@@ -413,16 +608,12 @@ function PropertyRow({
         />
 
         {/* Type */}
-        <select
-          style={{ ...ms.select, width: 80, flexShrink: 0 }}
-          value={displayType}
-          onChange={e => handleTypeChange(e.target.value)}
-        >
-          {childTypes.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <div style={{ width: 88, flexShrink: 0 }}>
+          <TypeSelect value={displayType} onChange={handleTypeChange} allowedTypes={childTypes} />
+        </div>
 
-        {displayType === '$ref' ? (
-          /* $ref selector/input */
+        {/* $ref value */}
+        {showRef ? (
           availableRefs.length > 0 ? (
             <select
               style={{ ...ms.select, flex: 1 }}
@@ -447,24 +638,37 @@ function PropertyRow({
             <select
               style={{ ...ms.select, width: 72, flexShrink: 0 }}
               value={schema.format ?? ''}
-              disabled={!FORMAT_MAP[displayType]}
+              disabled={!showFormat}
               onChange={e => onSchemaChange({ ...schema, format: e.target.value || undefined })}
             >
               {(FORMAT_MAP[displayType] ?? ['']).map(f => (
                 <option key={f} value={f}>{f || '—'}</option>
               ))}
             </select>
-            {/* Description */}
-            <input
-              style={{ ...ms.input, flex: 1 }}
-              value={schema.description ?? ''}
-              onChange={e => onSchemaChange({ ...schema, description: e.target.value || undefined })}
-              placeholder="Description…"
-            />
+
+            {/* Description (inline for simple types; hidden for complex — they show it when expanded) */}
+            {showInlineDesc ? (
+              <input
+                style={{ ...ms.input, flex: 1 }}
+                value={schema.description ?? ''}
+                onChange={e => onSchemaChange({ ...schema, description: e.target.value || undefined })}
+                placeholder="Description…"
+              />
+            ) : (
+              <span style={{ flex: 1, fontSize: '11px', color: 'var(--vscode-descriptionForeground, #666)', padding: '0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {['allOf', 'oneOf', 'anyOf', 'not'].includes(displayType)
+                  ? `${displayType} (${((schema[displayType] as OpenApiSchema[])?.length ?? (displayType === 'not' ? 1 : 0))} schema${displayType === 'not' ? '' : 's'})`
+                  : displayType === 'object'
+                    ? `${Object.keys(schema.properties ?? {}).length} props`
+                    : displayType === 'array'
+                      ? `array of ${getDisplayType(schema.items ?? { type: 'string' })}`
+                      : ''}
+              </span>
+            )}
           </>
         )}
 
-        {/* Required checkbox */}
+        {/* Required */}
         <label
           title="Required"
           style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', flexShrink: 0, width: 28 }}
@@ -481,8 +685,8 @@ function PropertyRow({
         <button style={{ ...ms.removeBtn, width: 22 }} onClick={onRemove} title="Remove property">×</button>
       </div>
 
-      {/* Nested: object properties or array items */}
-      {expanded && isComplex && (
+      {/* Expanded nested schema */}
+      {expanded && complex && (
         <div style={ms.nested}>
           {displayType === 'object' && (
             <ObjectPropertiesEditor
@@ -498,6 +702,26 @@ function PropertyRow({
               <SchemaEditor
                 schema={schema.items ?? { type: 'string' }}
                 onChange={items => onSchemaChange({ ...schema, items })}
+                availableRefs={availableRefs}
+                depth={depth + 1}
+              />
+            </div>
+          )}
+          {(['allOf', 'oneOf', 'anyOf'] as CompositionKeyword[]).includes(displayType as CompositionKeyword) && (
+            <CompositionEditor
+              keyword={displayType as CompositionKeyword}
+              schemas={(schema[displayType] as OpenApiSchema[]) ?? []}
+              onChange={schemas => onSchemaChange({ ...schema, [displayType]: schemas })}
+              availableRefs={availableRefs}
+              depth={depth + 1}
+            />
+          )}
+          {displayType === 'not' && (
+            <div>
+              <div style={ms.sectionHeader}>Schema that must NOT match</div>
+              <SchemaEditor
+                schema={schema.not ?? { type: 'string' }}
+                onChange={not => onSchemaChange({ not })}
                 availableRefs={availableRefs}
                 depth={depth + 1}
               />
@@ -523,7 +747,6 @@ export function ContentBodyEditor({
   const types = Object.keys(content);
   const [activeType, setActiveType] = useState<string>(types[0] ?? '');
 
-  // Keep activeType valid when content changes
   useEffect(() => {
     if (!types.includes(activeType) && types.length > 0) {
       setActiveType(types[0]);
@@ -551,7 +774,7 @@ export function ContentBodyEditor({
 
   return (
     <div>
-      {/* Content-type tabs + add */}
+      {/* Content-type tabs */}
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
         {types.map(ct => (
           <div key={ct} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -579,7 +802,7 @@ export function ContentBodyEditor({
         )}
       </div>
 
-      {/* Schema editor for active content type */}
+      {/* Schema editor */}
       {current && content[current] !== undefined ? (
         <SchemaEditor
           schema={content[current].schema ?? { type: 'object', properties: {} }}

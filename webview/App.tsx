@@ -32,6 +32,10 @@ export interface OpenApiSchema {
   format?: string;
   example?: unknown;
   $ref?: string;
+  allOf?: OpenApiSchema[];
+  oneOf?: OpenApiSchema[];
+  anyOf?: OpenApiSchema[];
+  not?: OpenApiSchema;
   [key: string]: unknown;
 }
 
