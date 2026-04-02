@@ -1,1 +1,1 @@
-# openapi-editor
+# openapi-visual-editor
