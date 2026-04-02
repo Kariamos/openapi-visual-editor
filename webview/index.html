@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content-Security-Policy is intentionally permissive here for the dev
+      server. The extension host sets a proper CSP at runtime via the
+      WebviewPanel options.
+    -->
+    <title>OpenAPI Visual Editor</title>
+    <style>
+      /* Reset & base — use VS Code CSS variables so the theme is respected */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body,
+      #root {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+        font-size: var(--vscode-font-size, 13px);
+        color: var(--vscode-editor-foreground, #cccccc);
+        background-color: var(--vscode-editor-background, #1e1e1e);
+      }
+
+      /* Scrollbar styling */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+      }
+
+      /* Input / select base resets */
+      input,
+      textarea,
+      select {
+        font-family: inherit;
+        font-size: inherit;
+        color: var(--vscode-input-foreground, #cccccc);
+        background: var(--vscode-input-background, #3c3c3c);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 2px;
+        padding: 4px 6px;
+        outline: none;
+        width: 100%;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: var(--vscode-focusBorder, #007fd4);
+      }
+      input[type='checkbox'] {
+        width: auto;
+        accent-color: var(--vscode-checkbox-background, #007fd4);
+      }
+
+      button {
+        font-family: inherit;
+        font-size: inherit;
+        cursor: pointer;
+        border: none;
+        border-radius: 2px;
+        padding: 4px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
