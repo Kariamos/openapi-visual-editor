@@ -478,7 +478,7 @@ function validateSchema(
     if (!Array.isArray(schema.enum) || schema.enum.length === 0) {
       out.push({ severity: 'warning', path: `${basePath}.enum`, message: 'Enum is empty.', category: 'schemas' });
     }
-    if (schema.enum && new Set(schema.enum.map(JSON.stringify)).size !== schema.enum.length) {
+    if (schema.enum && new Set(schema.enum.map((v) => JSON.stringify(v))).size !== schema.enum.length) {
       out.push({ severity: 'warning', path: `${basePath}.enum`, message: 'Enum contains duplicate values.', category: 'schemas' });
     }
   }

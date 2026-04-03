@@ -162,7 +162,7 @@ const styles = {
 
 export function App(): React.ReactElement {
   const [doc, setDoc] = useState<OpenApiDocument | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [_errors, setErrors] = useState<string[]>([]);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<HttpMethod | null>(null);
