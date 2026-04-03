@@ -1,0 +1,86 @@
+Source-Available License v1.0
+
+Copyright (c) 2026 Kariamos. All rights reserved.
+
+TERMS AND CONDITIONS
+
+1. DEFINITIONS
+
+   "Software" means the source code, object code, documentation, and any
+   associated materials in this repository.
+
+   "Owner" means the copyright holder identified above.
+
+   "Contributor" means any person who submits a Contribution to this
+   repository via pull request or other means.
+
+   "Contribution" means any modification, addition, or deletion submitted
+   by a Contributor to be incorporated into the Software.
+
+2. GRANT OF RIGHTS
+
+   Subject to the terms of this License, the Owner grants you a limited,
+   non-exclusive, non-transferable, revocable right to:
+
+   a) View and read the source code of the Software for personal,
+      educational, or evaluation purposes.
+
+   b) Fork this repository solely for the purpose of submitting
+      Contributions back to the original repository.
+
+   c) Run the Software locally for personal, non-commercial use.
+
+3. RESTRICTIONS
+
+   You may NOT, without prior written permission from the Owner:
+
+   a) Copy, reproduce, or redistribute the Software or any substantial
+      portion thereof.
+
+   b) Use the Software, in whole or in part, in any other project,
+      product, or service, whether commercial or non-commercial.
+
+   c) Create derivative works based on the Software, except as permitted
+      under Section 2(b) for Contributions.
+
+   d) Sublicense, sell, lease, or otherwise transfer the Software to any
+      third party.
+
+   e) Remove or alter any copyright notices, license texts, or
+      attribution notices contained in the Software.
+
+4. CONTRIBUTIONS
+
+   By submitting a Contribution to this repository, you:
+
+   a) Grant the Owner a perpetual, worldwide, non-exclusive, royalty-free,
+      irrevocable license to use, reproduce, modify, distribute, and
+      sublicense your Contribution as part of the Software.
+
+   b) Represent that you have the legal right to grant the above license.
+
+   c) Understand that your Contribution will be subject to the terms of
+      this License.
+
+   Contributions are welcome and encouraged via pull requests. Contributors
+   will be credited in the repository.
+
+5. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+   IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+6. TERMINATION
+
+   This License is effective until terminated. Your rights under this
+   License will terminate automatically if you fail to comply with any of
+   its terms. Upon termination, you must destroy all copies of the Software
+   in your possession.
+
+7. GOVERNING LAW
+
+   This License shall be governed by and construed in accordance with the
+   laws of Italy, without regard to its conflict of law provisions.
