@@ -4,6 +4,7 @@ src/**
 webview/src/**
 webview/node_modules/**
 webview/components/**
+webview/utils/**
 webview/main.tsx
 webview/App.tsx
 webview/vite.config.ts
