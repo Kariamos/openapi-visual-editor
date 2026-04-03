@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { vscode } from './main';
 import { Sidebar } from './components/Sidebar';
 import { InfoEditor } from './components/InfoEditor';
 import { EndpointEditor } from './components/EndpointEditor';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel';
+import { validateDocument } from './utils/diagnostics';
 
 // ─── Type definitions (mirrors yamlParser.ts on the Node side) ───────────────
 
@@ -326,6 +328,12 @@ export function App(): React.ReactElement {
     );
   }
 
+  // ── Real-time diagnostics ──────────────────────────────────────────────
+  const diagnostics = useMemo(() => {
+    if (!doc) return [];
+    return validateDocument(doc);
+  }, [doc]);
+
   const currentOperation =
     selectedPath && selectedMethod
       ? doc.paths?.[selectedPath]?.[selectedMethod] ?? null
@@ -333,13 +341,7 @@ export function App(): React.ReactElement {
 
   return (
     <div style={styles.container}>
-      {errors.length > 0 && (
-        <div style={styles.warningBanner}>
-          <strong>Validation warnings:</strong>{' '}
-          {errors.join(' · ')}
-        </div>
-      )}
-
+      {/* Main content area */}
       <div style={styles.mainArea}>
         <Sidebar
           paths={doc.paths ?? {}}
@@ -379,6 +381,9 @@ export function App(): React.ReactElement {
           </div>
         </div>
       </div>
+
+      {/* Diagnostics panel — bottom, like VS Code's Problems panel */}
+      <DiagnosticsPanel diagnostics={diagnostics} />
     </div>
   );
 }
