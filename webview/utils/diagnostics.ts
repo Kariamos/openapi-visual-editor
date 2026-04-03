@@ -13,6 +13,10 @@ export interface Diagnostic {
   message: string;
   /** Category for grouping in the panel */
   category: DiagnosticCategory;
+  /** Source of the diagnostic */
+  source?: 'custom' | 'spectral';
+  /** Rule code (for Spectral diagnostics) */
+  ruleCode?: string;
 }
 
 export type DiagnosticCategory =

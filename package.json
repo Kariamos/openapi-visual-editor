@@ -55,6 +55,8 @@
     "pretest": "npm run compile"
   },
   "dependencies": {
+    "@stoplight/spectral-core": "^1.21.0",
+    "@stoplight/spectral-rulesets": "^1.22.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

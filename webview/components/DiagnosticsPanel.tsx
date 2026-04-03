@@ -354,6 +354,19 @@ function CategoryGroup({
           <span style={styles.categoryBadge}>
             {CATEGORY_LABELS[category]}
           </span>
+          {diag.source && (
+            <span style={{
+              ...styles.categoryBadge,
+              background: diag.source === 'spectral'
+                ? 'rgba(79, 139, 255, 0.2)'
+                : 'rgba(255, 255, 255, 0.1)',
+              color: diag.source === 'spectral'
+                ? '#6ea8fe'
+                : 'var(--vscode-badge-foreground, #ccc)',
+            }}>
+              {diag.source === 'spectral' ? 'Spectral' : 'Custom'}
+            </span>
+          )}
         </div>
       ))}
     </>
