@@ -13,6 +13,7 @@ webview/tsconfig.json
 .eslintrc.json
 tsconfig.json
 node_modules/**
+!node_modules/js-yaml/**
 out/test/**
 **/*.map
 **/*.ts
