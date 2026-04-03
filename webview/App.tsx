@@ -308,6 +308,12 @@ export function App(): React.ReactElement {
     [doc, notifyExtension]
   );
 
+  // ── Real-time diagnostics (must be before any early returns — hooks rule) ──
+  const diagnostics = useMemo(() => {
+    if (!doc) return [];
+    return validateDocument(doc);
+  }, [doc]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (fatalError) {
@@ -327,12 +333,6 @@ export function App(): React.ReactElement {
       </div>
     );
   }
-
-  // ── Real-time diagnostics ──────────────────────────────────────────────
-  const diagnostics = useMemo(() => {
-    if (!doc) return [];
-    return validateDocument(doc);
-  }, [doc]);
 
   const currentOperation =
     selectedPath && selectedMethod
