@@ -2,8 +2,12 @@
   "name": "openapi-visual-editor",
   "displayName": "OpenAPI Visual Editor",
   "description": "A graphical editor for OpenAPI/Swagger YAML specifications",
-  "version": "0.0.1",
-  "publisher": "openapi-visual-editor",
+  "version": "1.0.0",
+  "publisher": "Kariamos",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kariamos/openapi-visual-editor.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
