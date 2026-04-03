@@ -46,7 +46,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                type: object
+                properties:
+                  newProperty:
+                    type: string
     post:
       summary: Create a pet
       operationId: createPet
@@ -120,6 +123,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Pet"
+              examples:
+                default:
+                  summary: Default example
+                  value:
+                    id: 42
+                    name: Fido
+                    tag: dog
+                    owner:
+                      id: 1
+                      name: John Doe
+                      email: john@example.com
+                      address:
+                        street: 123 Main St
+                        city: Springfield
+                        zip: "12345"
         "404":
           description: Pet not found
           content:
@@ -151,7 +169,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Pet"
+                type: object
+                properties:
+                  newProperty:
+                    type: string
         "404":
           description: Pet not found
           content:
@@ -173,8 +194,14 @@ paths:
           schema:
             type: string
       responses:
-        "204":
-          description: Pet deleted
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+              examples: {}
         "404":
           description: Pet not found
           content:
