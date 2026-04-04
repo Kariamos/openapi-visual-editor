@@ -1,4 +1,4 @@
-import type { OpenApiDocument, OpenApiOperation, OpenApiSchema, OpenApiParameter, HttpMethod } from '../App';
+import type { OpenApiDocument, OpenApiOperation, OpenApiSchema, HttpMethod } from '../App';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -13,6 +13,10 @@ export interface Diagnostic {
   message: string;
   /** Category for grouping in the panel */
   category: DiagnosticCategory;
+  /** Source of the diagnostic */
+  source?: 'custom' | 'spectral';
+  /** Rule code (for Spectral diagnostics) */
+  ruleCode?: string;
 }
 
 export type DiagnosticCategory =
@@ -27,112 +31,28 @@ export type DiagnosticCategory =
   | 'references';  // $ref issues
 
 // ─── Main validation ────────────────────────────────────────────────────────
+// Only UX-specific hints not covered by Spectral's OAS ruleset.
+// Structural/spec-compliance rules are handled by Spectral in the extension host.
 
 export function validateDocument(doc: OpenApiDocument): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
-  validateRoot(doc, diagnostics);
-  validateInfo(doc, diagnostics);
-  validateServers(doc, diagnostics);
-  validatePaths(doc, diagnostics);
-  validateComponents(doc, diagnostics);
-  validateTags(doc, diagnostics);
-  validateSecuritySchemes(doc, diagnostics);
+  validateOperationHints(doc, diagnostics);
+  validateSchemaHints(doc, diagnostics);
+  validateUnusedTags(doc, diagnostics);
 
   return diagnostics;
 }
 
-// ─── Root ───────────────────────────────────────────────────────────────────
+// ─── Operation hints ───────────────────────────────────────────────────────
 
-function validateRoot(doc: OpenApiDocument, out: Diagnostic[]): void {
-  if (!doc.openapi) {
-    out.push({
-      severity: 'error',
-      path: 'openapi',
-      message: 'Missing required field "openapi". Should be e.g. "3.0.3" or "3.1.0".',
-      category: 'structure',
-    });
-  } else if (!/^3\.\d+\.\d+$/.test(doc.openapi)) {
-    out.push({
-      severity: 'error',
-      path: 'openapi',
-      message: `Invalid version "${doc.openapi}". Expected a valid OpenAPI 3.x version (e.g. "3.0.3").`,
-      category: 'structure',
-    });
-  }
-
-  if (!doc.paths || Object.keys(doc.paths).length === 0) {
-    out.push({
-      severity: 'warning',
-      path: 'paths',
-      message: 'No paths defined. Your API has no endpoints.',
-      category: 'structure',
-    });
-  }
-}
-
-// ─── Info ───────────────────────────────────────────────────────────────────
-
-function validateInfo(doc: OpenApiDocument, out: Diagnostic[]): void {
-  if (!doc.info) {
-    out.push({ severity: 'error', path: 'info', message: 'Missing required "info" object.', category: 'structure' });
-    return;
-  }
-
-  if (!doc.info.title || doc.info.title.trim() === '') {
-    out.push({ severity: 'error', path: 'info.title', message: 'API title is required and cannot be empty.', category: 'structure' });
-  }
-
-  if (!doc.info.version || doc.info.version.trim() === '') {
-    out.push({ severity: 'error', path: 'info.version', message: 'API version is required and cannot be empty.', category: 'structure' });
-  }
-
-  if (!doc.info.description || doc.info.description.trim() === '') {
-    out.push({ severity: 'info', path: 'info.description', message: 'Consider adding an API description for better documentation.', category: 'structure' });
-  }
-}
-
-// ─── Servers ────────────────────────────────────────────────────────────────
-
-function validateServers(doc: OpenApiDocument, out: Diagnostic[]): void {
-  if (!doc.servers || doc.servers.length === 0) {
-    out.push({ severity: 'info', path: 'servers', message: 'No servers defined. Consumers won\'t know the base URL.', category: 'structure' });
-    return;
-  }
-
-  doc.servers.forEach((server, i) => {
-    if (!server.url || server.url.trim() === '') {
-      out.push({ severity: 'error', path: `servers[${i}].url`, message: 'Server URL is required.', category: 'structure' });
-    } else {
-      try {
-        new URL(server.url.replace(/\{[^}]+\}/g, 'placeholder'));
-      } catch {
-        out.push({ severity: 'warning', path: `servers[${i}].url`, message: `Server URL "${server.url}" does not look like a valid URL.`, category: 'structure' });
-      }
-    }
-  });
-}
-
-// ─── Paths & Operations ────────────────────────────────────────────────────
-
-function validatePaths(doc: OpenApiDocument, out: Diagnostic[]): void {
+function validateOperationHints(doc: OpenApiDocument, out: Diagnostic[]): void {
   if (!doc.paths) return;
 
   const allMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
-  const operationIds = new Map<string, string>(); // operationId → "METHOD /path"
-  const definedSchemas = Object.keys(doc.components?.schemas ?? {});
-  const definedSecuritySchemes = Object.keys(doc.components?.securitySchemes ?? {});
 
   for (const [pathKey, pathItem] of Object.entries(doc.paths)) {
     if (!pathItem) continue;
-
-    // Path must start with /
-    if (!pathKey.startsWith('/')) {
-      out.push({ severity: 'error', path: `paths.${pathKey}`, message: `Path "${pathKey}" must start with "/".`, category: 'paths' });
-    }
-
-    // Extract path parameters from the URL template
-    const pathParams = (pathKey.match(/\{([^}]+)\}/g) ?? []).map((p) => p.slice(1, -1));
 
     for (const method of allMethods) {
       const op = pathItem[method];
@@ -140,219 +60,39 @@ function validatePaths(doc: OpenApiDocument, out: Diagnostic[]): void {
 
       const opPath = `paths.${pathKey}.${method.toUpperCase()}`;
 
-      validateOperation(op, opPath, method, pathKey, pathParams, operationIds, definedSchemas, definedSecuritySchemes, doc, out);
-    }
-  }
-}
-
-function validateOperation(
-  op: OpenApiOperation,
-  opPath: string,
-  method: HttpMethod,
-  pathKey: string,
-  pathParams: string[],
-  operationIds: Map<string, string>,
-  definedSchemas: string[],
-  definedSecuritySchemes: string[],
-  doc: OpenApiDocument,
-  out: Diagnostic[]
-): void {
-  // Summary recommended
-  if (!op.summary || op.summary.trim() === '') {
-    out.push({ severity: 'info', path: opPath, message: 'Consider adding a summary for this endpoint.', category: 'operations' });
-  }
-
-  // OperationId checks
-  if (!op.operationId || op.operationId.trim() === '') {
-    out.push({ severity: 'warning', path: `${opPath}.operationId`, message: 'Missing operationId. Code generators will use auto-generated names.', category: 'operations' });
-  } else {
-    // Check uniqueness
-    const existing = operationIds.get(op.operationId);
-    if (existing) {
-      out.push({
-        severity: 'error',
-        path: `${opPath}.operationId`,
-        message: `Duplicate operationId "${op.operationId}" — already used by ${existing}.`,
-        category: 'operations',
-      });
-    } else {
-      operationIds.set(op.operationId, `${method.toUpperCase()} ${pathKey}`);
-    }
-
-    // Check format (should be camelCase identifier)
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(op.operationId)) {
-      out.push({
-        severity: 'warning',
-        path: `${opPath}.operationId`,
-        message: `operationId "${op.operationId}" contains special characters. Use camelCase for best code generation compatibility.`,
-        category: 'operations',
-      });
-    }
-  }
-
-  // Path parameters must be declared
-  const declaredPathParams = (op.parameters ?? [])
-    .filter((p) => p.in === 'path')
-    .map((p) => p.name);
-
-  for (const pp of pathParams) {
-    if (!declaredPathParams.includes(pp)) {
-      out.push({
-        severity: 'error',
-        path: `${opPath}.parameters`,
-        message: `Path parameter "{${pp}}" in URL but not declared in parameters.`,
-        category: 'parameters',
-      });
-    }
-  }
-
-  // Declared path parameters must be required
-  for (const param of (op.parameters ?? [])) {
-    if (param.in === 'path' && !param.required) {
-      out.push({
-        severity: 'error',
-        path: `${opPath}.parameters.${param.name}`,
-        message: `Path parameter "${param.name}" must have required: true.`,
-        category: 'parameters',
-      });
-    }
-  }
-
-  // Validate parameters
-  validateParameters(op.parameters ?? [], opPath, out);
-
-  // Responses
-  validateResponses(op.responses, opPath, definedSchemas, out);
-
-  // Request body on GET/DELETE/HEAD is unusual
-  if (op.requestBody && ['get', 'head', 'delete'].includes(method)) {
-    out.push({
-      severity: 'warning',
-      path: `${opPath}.requestBody`,
-      message: `${method.toUpperCase()} with a request body is unusual and may not be supported by all clients.`,
-      category: 'operations',
-    });
-  }
-
-  // Request body validation
-  if (op.requestBody?.content) {
-    validateContentMap(op.requestBody.content, `${opPath}.requestBody`, definedSchemas, out);
-
-    // Validate examples in request body
-    for (const [mediaType, mediaObj] of Object.entries(op.requestBody.content)) {
-      if (mediaObj.examples) {
-        validateExamples(mediaObj.examples, mediaObj.schema, `${opPath}.requestBody.${mediaType}`, out);
-      }
-    }
-  }
-
-  // Tags reference check
-  const docTags = (doc.tags ?? []).map((t) => t.name);
-  for (const tag of op.tags ?? []) {
-    if (docTags.length > 0 && !docTags.includes(tag)) {
-      out.push({
-        severity: 'warning',
-        path: `${opPath}.tags`,
-        message: `Tag "${tag}" is used but not defined in the top-level "tags" array.`,
-        category: 'operations',
-      });
-    }
-  }
-
-  // Security scheme references
-  for (const secReq of op.security ?? []) {
-    for (const scheme of Object.keys(secReq)) {
-      if (!definedSecuritySchemes.includes(scheme)) {
+      // Request body on GET/DELETE/HEAD is unusual — Spectral doesn't check this
+      if (op.requestBody && ['get', 'head', 'delete'].includes(method)) {
         out.push({
-          severity: 'error',
-          path: `${opPath}.security`,
-          message: `Security scheme "${scheme}" is referenced but not defined in components.securitySchemes.`,
-          category: 'security',
+          severity: 'warning',
+          path: `${opPath}.requestBody`,
+          message: `${method.toUpperCase()} with a request body is unusual and may not be supported by all clients.`,
+          category: 'operations',
         });
       }
+
+      // Validate media type format in request body
+      if (op.requestBody?.content) {
+        validateMediaTypes(op.requestBody.content, `${opPath}.requestBody`, out);
+      }
+
+      // Validate response hints
+      validateResponseContentHints(op.responses, opPath, out);
     }
   }
 }
 
-// ─── Parameters ─────────────────────────────────────────────────────────────
-
-function validateParameters(params: OpenApiParameter[], basePath: string, out: Diagnostic[]): void {
-  const seen = new Map<string, number>(); // "in:name" → count
-
-  for (let i = 0; i < params.length; i++) {
-    const param = params[i];
-    const paramPath = `${basePath}.parameters[${i}]`;
-
-    // Name required
-    if (!param.name || param.name.trim() === '') {
-      out.push({ severity: 'error', path: paramPath, message: 'Parameter name is required.', category: 'parameters' });
-    }
-
-    // Schema recommended
-    if (!param.schema) {
-      out.push({ severity: 'warning', path: `${paramPath}.schema`, message: `Parameter "${param.name}" has no schema defined.`, category: 'parameters' });
-    }
-
-    // Duplicate check (same name + same location)
-    const key = `${param.in}:${param.name}`;
-    const count = (seen.get(key) ?? 0) + 1;
-    seen.set(key, count);
-    if (count > 1) {
-      out.push({
-        severity: 'error',
-        path: paramPath,
-        message: `Duplicate parameter "${param.name}" in "${param.in}". Each name+location combination must be unique.`,
-        category: 'parameters',
-      });
-    }
-  }
-}
-
-// ─── Responses ──────────────────────────────────────────────────────────────
-
-function validateResponses(
+function validateResponseContentHints(
   responses: Record<string, unknown> | undefined,
   basePath: string,
-  definedSchemas: string[],
   out: Diagnostic[]
 ): void {
-  if (!responses || Object.keys(responses).length === 0) {
-    out.push({ severity: 'error', path: `${basePath}.responses`, message: 'At least one response is required.', category: 'responses' });
-    return;
-  }
+  if (!responses) return;
 
   for (const [code, respObj] of Object.entries(responses)) {
     const respPath = `${basePath}.responses.${code}`;
     const resp = respObj as Record<string, unknown>;
 
-    // Status code format
-    if (!/^[1-5]\d{2}$/.test(code) && code !== 'default') {
-      out.push({ severity: 'warning', path: respPath, message: `Response code "${code}" is not a standard HTTP status code.`, category: 'responses' });
-    }
-
-    // Description required
-    if (!resp.description || (typeof resp.description === 'string' && resp.description.trim() === '')) {
-      out.push({ severity: 'warning', path: `${respPath}.description`, message: `Response ${code} has an empty description.`, category: 'responses' });
-    }
-
-    // Validate content map if present
-    if (resp.content && typeof resp.content === 'object') {
-      validateContentMap(resp.content as Record<string, Record<string, unknown>>, respPath, definedSchemas, out);
-
-      // Validate examples in response
-      for (const [mediaType, mediaObj] of Object.entries(resp.content as Record<string, Record<string, unknown>>)) {
-        if (mediaObj.examples && typeof mediaObj.examples === 'object') {
-          validateExamples(
-            mediaObj.examples as Record<string, { summary?: string; value?: unknown }>,
-            mediaObj.schema as OpenApiSchema | undefined,
-            `${respPath}.${mediaType}`,
-            out
-          );
-        }
-      }
-    }
-
-    // 2xx success with no content body — might be intentional (204) but warn for 200/201
+    // 200/201 with no content body — suggest 204 or adding a schema
     if (['200', '201'].includes(code) && !resp.content) {
       out.push({
         severity: 'info',
@@ -361,109 +101,52 @@ function validateResponses(
         category: 'responses',
       });
     }
+
+    // Validate media type format in responses
+    if (resp.content && typeof resp.content === 'object') {
+      validateMediaTypes(resp.content as Record<string, unknown>, respPath, out);
+    }
   }
 }
 
-// ─── Content map (shared by requestBody and responses) ──────────────────────
+// ─── Media type format ─────────────────────────────────────────────────────
 
-function validateContentMap(
-  content: Record<string, Record<string, unknown>>,
+function validateMediaTypes(
+  content: Record<string, unknown>,
   basePath: string,
-  definedSchemas: string[],
   out: Diagnostic[]
 ): void {
-  for (const [mediaType, mediaObj] of Object.entries(content)) {
-    const mtPath = `${basePath}.content.${mediaType}`;
-
-    // Check media type format
+  for (const mediaType of Object.keys(content)) {
     if (!/^[a-z]+\/[a-z0-9.+\-]+$/.test(mediaType)) {
       out.push({
         severity: 'warning',
-        path: mtPath,
+        path: `${basePath}.content.${mediaType}`,
         message: `Media type "${mediaType}" does not look valid. Expected format like "application/json".`,
         category: 'schemas',
       });
     }
-
-    // Schema should exist
-    if (!mediaObj.schema) {
-      out.push({ severity: 'warning', path: `${mtPath}.schema`, message: 'No schema defined for this content type.', category: 'schemas' });
-    } else {
-      validateSchema(mediaObj.schema as OpenApiSchema, `${mtPath}.schema`, definedSchemas, out, 0);
-    }
   }
 }
 
-// ─── Schema validation (recursive) ─────────────────────────────────────────
+// ─── Schema hints ──────────────────────────────────────────────────────────
 
-function validateSchema(
+function validateSchemaHints(doc: OpenApiDocument, out: Diagnostic[]): void {
+  if (!doc.components?.schemas) return;
+
+  for (const [name, schema] of Object.entries(doc.components.schemas)) {
+    checkSchemaHints(schema, `components.schemas.${name}`, out, 0);
+  }
+}
+
+function checkSchemaHints(
   schema: OpenApiSchema,
   basePath: string,
-  definedSchemas: string[],
   out: Diagnostic[],
   depth: number
 ): void {
-  if (depth > 8) return; // Prevent infinite recursion
+  if (depth > 8 || schema.$ref) return;
 
-  // $ref validation
-  if (schema.$ref) {
-    const refMatch = schema.$ref.match(/^#\/components\/schemas\/(.+)$/);
-    if (refMatch) {
-      if (!definedSchemas.includes(refMatch[1])) {
-        out.push({
-          severity: 'error',
-          path: basePath,
-          message: `$ref "${schema.$ref}" points to undefined schema "${refMatch[1]}".`,
-          category: 'references',
-        });
-      }
-    } else if (!schema.$ref.startsWith('#/')) {
-      out.push({
-        severity: 'info',
-        path: basePath,
-        message: `External $ref "${schema.$ref}" — cannot be validated locally.`,
-        category: 'references',
-      });
-    }
-    return; // $ref overrides other schema properties
-  }
-
-  // Type check
-  const validTypes = ['string', 'integer', 'number', 'boolean', 'object', 'array'];
-  if (schema.type && !validTypes.includes(schema.type)) {
-    out.push({
-      severity: 'error',
-      path: `${basePath}.type`,
-      message: `Invalid schema type "${schema.type}". Must be one of: ${validTypes.join(', ')}.`,
-      category: 'schemas',
-    });
-  }
-
-  // Array must have items
-  if (schema.type === 'array' && !schema.items) {
-    out.push({
-      severity: 'error',
-      path: `${basePath}.items`,
-      message: 'Array schema must define "items".',
-      category: 'schemas',
-    });
-  }
-
-  // Object with properties — check required fields match
-  if (schema.type === 'object' && schema.properties && schema.required) {
-    for (const reqField of schema.required) {
-      if (!schema.properties[reqField]) {
-        out.push({
-          severity: 'error',
-          path: `${basePath}.required`,
-          message: `Required field "${reqField}" is not defined in properties.`,
-          category: 'schemas',
-        });
-      }
-    }
-  }
-
-  // Object with no properties
+  // Object with no properties and no composition — Spectral doesn't flag this
   if (schema.type === 'object' && (!schema.properties || Object.keys(schema.properties).length === 0) && !schema.allOf && !schema.oneOf && !schema.anyOf) {
     out.push({
       severity: 'info',
@@ -473,252 +156,65 @@ function validateSchema(
     });
   }
 
-  // Enum validation
-  if (schema.enum) {
-    if (!Array.isArray(schema.enum) || schema.enum.length === 0) {
-      out.push({ severity: 'warning', path: `${basePath}.enum`, message: 'Enum is empty.', category: 'schemas' });
-    }
-    if (schema.enum && new Set(schema.enum.map((v) => JSON.stringify(v))).size !== schema.enum.length) {
-      out.push({ severity: 'warning', path: `${basePath}.enum`, message: 'Enum contains duplicate values.', category: 'schemas' });
-    }
-  }
-
-  // Format validation
+  // Non-standard format hint — Spectral doesn't validate format values
   if (schema.format && schema.type) {
-    const validFormats: Record<string, string[]> = {
+    const standardFormats: Record<string, string[]> = {
       string: ['date', 'date-time', 'email', 'hostname', 'ipv4', 'ipv6', 'uri', 'uuid', 'byte', 'binary', 'password'],
       integer: ['int32', 'int64'],
       number: ['float', 'double'],
     };
-    const allowedFormats = validFormats[schema.type];
-    if (allowedFormats && !allowedFormats.includes(schema.format)) {
+    const allowed = standardFormats[schema.type];
+    if (allowed && !allowed.includes(schema.format)) {
       out.push({
         severity: 'info',
         path: `${basePath}.format`,
-        message: `Format "${schema.format}" is not a standard format for type "${schema.type}". Standard formats: ${allowedFormats.join(', ')}.`,
+        message: `Format "${schema.format}" is not a standard format for type "${schema.type}". Standard formats: ${allowed.join(', ')}.`,
         category: 'schemas',
       });
     }
   }
 
-  // Recurse into nested schemas
+  // Recurse
   if (schema.properties) {
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
-      validateSchema(propSchema, `${basePath}.properties.${propName}`, definedSchemas, out, depth + 1);
+    for (const [prop, propSchema] of Object.entries(schema.properties)) {
+      checkSchemaHints(propSchema, `${basePath}.properties.${prop}`, out, depth + 1);
     }
   }
   if (schema.items) {
-    validateSchema(schema.items, `${basePath}.items`, definedSchemas, out, depth + 1);
+    checkSchemaHints(schema.items, `${basePath}.items`, out, depth + 1);
   }
   for (const keyword of ['allOf', 'oneOf', 'anyOf'] as const) {
     const arr = schema[keyword];
     if (Array.isArray(arr)) {
-      if (arr.length === 0) {
-        out.push({ severity: 'warning', path: `${basePath}.${keyword}`, message: `${keyword} is empty.`, category: 'schemas' });
-      }
-      arr.forEach((s, i) => validateSchema(s as OpenApiSchema, `${basePath}.${keyword}[${i}]`, definedSchemas, out, depth + 1));
+      arr.forEach((s, i) => checkSchemaHints(s as OpenApiSchema, `${basePath}.${keyword}[${i}]`, out, depth + 1));
     }
   }
 }
 
-// ─── Examples ───────────────────────────────────────────────────────────────
+// ─── Unused tags ───────────────────────────────────────────────────────────
+// Spectral checks the reverse (tag used but not defined), but not this direction.
 
-function validateExamples(
-  examples: Record<string, { summary?: string; value?: unknown; [key: string]: unknown }>,
-  schema: OpenApiSchema | undefined,
-  basePath: string,
-  out: Diagnostic[]
-): void {
-  for (const [name, example] of Object.entries(examples)) {
-    const exPath = `${basePath}.examples.${name}`;
+function validateUnusedTags(doc: OpenApiDocument, out: Diagnostic[]): void {
+  if (!doc.tags || !doc.paths) return;
 
-    // Example must have a value
-    if (example.value === undefined || example.value === null) {
-      out.push({
-        severity: 'warning',
-        path: exPath,
-        message: `Example "${name}" has no value defined.`,
-        category: 'examples',
-      });
-      continue;
-    }
-
-    // Type mismatch between example and schema
-    if (schema && !schema.$ref) {
-      validateExampleAgainstSchema(example.value, schema, exPath, name, out);
-    }
-  }
-}
-
-function validateExampleAgainstSchema(
-  value: unknown,
-  schema: OpenApiSchema,
-  basePath: string,
-  exampleName: string,
-  out: Diagnostic[]
-): void {
-  if (!schema.type) return;
-
-  const actualType = getJsonType(value);
-
-  const typeMap: Record<string, string[]> = {
-    string: ['string'],
-    integer: ['number'],
-    number: ['number'],
-    boolean: ['boolean'],
-    object: ['object'],
-    array: ['array'],
-  };
-
-  const expectedTypes = typeMap[schema.type];
-  if (expectedTypes && !expectedTypes.includes(actualType)) {
-    out.push({
-      severity: 'error',
-      path: basePath,
-      message: `Example "${exampleName}" has type "${actualType}" but schema expects "${schema.type}".`,
-      category: 'examples',
-    });
-    return;
-  }
-
-  // Check required properties in example objects
-  if (schema.type === 'object' && schema.required && typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    const objValue = value as Record<string, unknown>;
-    for (const reqField of schema.required) {
-      if (!(reqField in objValue)) {
-        out.push({
-          severity: 'warning',
-          path: basePath,
-          message: `Example "${exampleName}" is missing required property "${reqField}".`,
-          category: 'examples',
-        });
+  const usedTags = new Set<string>();
+  for (const pathItem of Object.values(doc.paths)) {
+    if (!pathItem) continue;
+    for (const op of Object.values(pathItem)) {
+      if (op && (op as OpenApiOperation).tags) {
+        for (const t of (op as OpenApiOperation).tags!) usedTags.add(t);
       }
     }
   }
-}
 
-function getJsonType(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
-}
-
-// ─── Components ─────────────────────────────────────────────────────────────
-
-function validateComponents(doc: OpenApiDocument, out: Diagnostic[]): void {
-  if (!doc.components?.schemas) return;
-
-  const definedSchemas = Object.keys(doc.components.schemas);
-
-  for (const [name, schema] of Object.entries(doc.components.schemas)) {
-    validateSchema(schema, `components.schemas.${name}`, definedSchemas, out, 0);
-  }
-
-  // Check for unused schemas
-  const usedRefs = collectAllRefs(doc);
-  for (const name of definedSchemas) {
-    const refStr = `#/components/schemas/${name}`;
-    if (!usedRefs.has(refStr)) {
+  for (const tag of doc.tags) {
+    if (tag.name && !usedTags.has(tag.name)) {
       out.push({
         severity: 'info',
-        path: `components.schemas.${name}`,
-        message: `Schema "${name}" is defined but never referenced.`,
-        category: 'schemas',
+        path: `tags.${tag.name}`,
+        message: `Tag "${tag.name}" is defined but not used by any operation.`,
+        category: 'structure',
       });
-    }
-  }
-}
-
-function collectAllRefs(obj: unknown, refs: Set<string> = new Set()): Set<string> {
-  if (typeof obj !== 'object' || obj === null) return refs;
-  if (Array.isArray(obj)) {
-    for (const item of obj) collectAllRefs(item, refs);
-    return refs;
-  }
-  const record = obj as Record<string, unknown>;
-  if (typeof record['$ref'] === 'string') {
-    refs.add(record['$ref']);
-  }
-  for (const value of Object.values(record)) {
-    collectAllRefs(value, refs);
-  }
-  return refs;
-}
-
-// ─── Tags ───────────────────────────────────────────────────────────────────
-
-function validateTags(doc: OpenApiDocument, out: Diagnostic[]): void {
-  if (!doc.tags) return;
-
-  const seen = new Set<string>();
-  for (const tag of doc.tags) {
-    if (!tag.name || tag.name.trim() === '') {
-      out.push({ severity: 'error', path: 'tags', message: 'Tag with empty name found.', category: 'structure' });
-    } else if (seen.has(tag.name)) {
-      out.push({ severity: 'warning', path: `tags.${tag.name}`, message: `Duplicate tag "${tag.name}".`, category: 'structure' });
-    } else {
-      seen.add(tag.name);
-    }
-
-    if (!tag.description || tag.description.trim() === '') {
-      out.push({ severity: 'info', path: `tags.${tag.name}`, message: `Tag "${tag.name}" has no description.`, category: 'structure' });
-    }
-  }
-
-  // Check for tags defined but never used in any operation
-  if (doc.paths) {
-    const usedTags = new Set<string>();
-    for (const pathItem of Object.values(doc.paths)) {
-      if (!pathItem) continue;
-      for (const op of Object.values(pathItem)) {
-        if (op && op.tags) {
-          for (const t of op.tags) usedTags.add(t);
-        }
-      }
-    }
-    for (const tag of doc.tags) {
-      if (tag.name && !usedTags.has(tag.name)) {
-        out.push({
-          severity: 'info',
-          path: `tags.${tag.name}`,
-          message: `Tag "${tag.name}" is defined but not used by any operation.`,
-          category: 'structure',
-        });
-      }
-    }
-  }
-}
-
-// ─── Security Schemes ───────────────────────────────────────────────────────
-
-function validateSecuritySchemes(doc: OpenApiDocument, out: Diagnostic[]): void {
-  const secSchemes = doc.components?.securitySchemes as Record<string, Record<string, unknown>> | undefined;
-  if (!secSchemes) return;
-
-  for (const [name, scheme] of Object.entries(secSchemes)) {
-    const sPath = `components.securitySchemes.${name}`;
-
-    if (!scheme.type) {
-      out.push({ severity: 'error', path: sPath, message: `Security scheme "${name}" is missing required "type" field.`, category: 'security' });
-    } else {
-      const validTypes = ['apiKey', 'http', 'oauth2', 'openIdConnect'];
-      if (!validTypes.includes(scheme.type as string)) {
-        out.push({
-          severity: 'error',
-          path: `${sPath}.type`,
-          message: `Invalid security scheme type "${scheme.type}". Must be one of: ${validTypes.join(', ')}.`,
-          category: 'security',
-        });
-      }
-
-      if (scheme.type === 'apiKey') {
-        if (!scheme.name) out.push({ severity: 'error', path: sPath, message: `apiKey scheme "${name}" requires a "name" field.`, category: 'security' });
-        if (!scheme.in) out.push({ severity: 'error', path: sPath, message: `apiKey scheme "${name}" requires an "in" field (query, header, or cookie).`, category: 'security' });
-      }
-
-      if (scheme.type === 'http' && !scheme.scheme) {
-        out.push({ severity: 'error', path: sPath, message: `HTTP scheme "${name}" requires a "scheme" field (e.g. "bearer").`, category: 'security' });
-      }
     }
   }
 }

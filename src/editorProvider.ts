@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { parseOpenApi, serializeOpenApi, validateOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
+import { parseOpenApi, serializeOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
+import { runSpectralValidation } from './utils/spectralValidator';
 
 export interface WebviewMessage {
   type: string;
@@ -21,6 +22,10 @@ export class OpenApiEditorProvider {
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private suppressNextChange = false;
   private disposables: vscode.Disposable[] = [];
+  /** Incremented on each validation to discard stale Spectral results */
+  private validationSeq = 0;
+  /** Last YAML string sent to Spectral, used to re-validate on edits */
+  private lastYamlString = '';
 
   constructor(
     panel: vscode.WebviewPanel,
@@ -72,13 +77,35 @@ export class OpenApiEditorProvider {
       return;
     }
 
-    const validationErrors = validateOpenApi(doc);
     const msg: WebviewMessage = {
       type: 'update',
       content: doc,
-      errors: validationErrors.map(e => `${e.path}: ${e.message}`),
     };
     this.panel.webview.postMessage(msg);
+
+    // Run Spectral validation asynchronously (don't block the UI)
+    this.lastYamlString = yamlString;
+    this.runSpectralAsync(yamlString);
+  }
+
+  /**
+   * Runs Spectral validation asynchronously and sends results to the webview.
+   * Uses a sequence number to discard stale results if the document changed.
+   */
+  private runSpectralAsync(yamlString: string): void {
+    const seq = ++this.validationSeq;
+
+    runSpectralValidation(yamlString).then((diagnostics) => {
+      // Discard if a newer validation has been triggered
+      if (seq !== this.validationSeq) return;
+
+      this.panel.webview.postMessage({
+        type: 'diagnostics',
+        diagnostics,
+      });
+    }).catch((err) => {
+      console.error('Spectral validation error:', err);
+    });
   }
 
   /**
@@ -109,6 +136,12 @@ export class OpenApiEditorProvider {
           case 'edit':
             if (message.content) {
               await this.syncFromWebview(message.content as OpenApiDocument);
+              // Re-run Spectral on the edited document
+              if (this.lastYamlString) {
+                const yamlString = serializeOpenApi(message.content as OpenApiDocument);
+                this.lastYamlString = yamlString;
+                this.runSpectralAsync(yamlString);
+              }
             }
             break;
 
