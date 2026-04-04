@@ -1,5 +1,5 @@
-import { Spectral, Document, type RulesetDefinition } from '@stoplight/spectral-core';
-import { truthy } from '@stoplight/spectral-functions';
+import { Spectral, type RulesetDefinition } from '@stoplight/spectral-core';
+import { truthy, falsy } from '@stoplight/spectral-functions';
 import { oas } from '@stoplight/spectral-rulesets';
 
 // ─── Types (matches the webview Diagnostic interface) ───────────────────────
@@ -41,18 +41,25 @@ async function getSpectral(): Promise<Spectral> {
 
         // Warn when GET/DELETE/HEAD has a request body
         'custom-no-request-body-on-get': {
-          message: '{{property}} with a request body is unusual and may not be supported by all clients.',
-          given: '$.paths[*][get,delete,head].requestBody',
+          message: 'GET/DELETE/HEAD with a request body is unusual and may not be supported by all clients.',
+          given: [
+            '$.paths[*].get.requestBody',
+            '$.paths[*].delete.requestBody',
+            '$.paths[*].head.requestBody',
+          ],
           severity: 1, // warning
           then: {
-            function: { name: 'falsy' } as never,
+            function: falsy,
           },
         },
 
         // Suggest using 204 when 200/201 has no content
         'custom-success-response-body': {
-          message: 'Response {{property}} has no content body. Consider adding a response schema, or use 204 for no-content responses.',
-          given: '$.paths[*][*].responses[200,201]',
+          message: 'Response has no content body. Consider adding a response schema, or use 204 for no-content responses.',
+          given: [
+            '$.paths[*][*].responses.200',
+            '$.paths[*][*].responses.201',
+          ],
           severity: 3, // hint → maps to info
           then: {
             field: 'content',
@@ -158,10 +165,7 @@ function formatPath(segments: (string | number)[]): string {
 export async function runSpectralValidation(yamlString: string): Promise<SpectralDiagnostic[]> {
   const spectral = await getSpectral();
 
-  // Create a Spectral Document so it knows the source format
-  const document = new Document(yamlString, undefined as never, 'openapi.yaml');
-
-  const results = await spectral.run(document);
+  const results = await spectral.run(yamlString);
 
   return results.map((result) => ({
     severity: mapSeverity(result.severity),
