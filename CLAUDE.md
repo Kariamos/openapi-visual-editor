@@ -38,6 +38,7 @@ npm run compile         # tsc → out/
 
 - Extension → WebView: `{ type: 'update', content: OpenApiDocument, errors?: string[] }`
 - Extension → WebView: `{ type: 'error', content: string }`
+- Extension → WebView: `{ type: 'diagnostics', diagnostics: Diagnostic[] }` (async Spectral results)
 - WebView → Extension: `{ type: 'edit', content: OpenApiDocument }`
 - WebView → Extension: `{ type: 'ready' }` (triggers initial file load)
 

@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import type { OpenApiPaths, HttpMethod } from '../App';
+import React, { useState } from "react";
+import type { OpenApiPaths, HttpMethod } from "../App";
 
 // ─── Method color map ───────────────────────────────────────────────────────
 
 const METHOD_COLORS: Record<string, string> = {
-  get: '#61affe',
-  post: '#49cc90',
-  put: '#fca130',
-  delete: '#f93e3e',
-  patch: '#50e3c2',
-  head: '#9012fe',
-  options: '#0d5aa7',
-  trace: '#666',
+  get: "#61affe",
+  post: "#49cc90",
+  put: "#fca130",
+  delete: "#f93e3e",
+  patch: "#50e3c2",
+  head: "#9012fe",
+  options: "#0d5aa7",
+  trace: "#666",
 };
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
@@ -19,102 +19,102 @@ const METHOD_COLORS: Record<string, string> = {
 const styles = {
   sidebar: {
     width: 260,
-    minWidth: 200,
-    borderRight: '1px solid var(--vscode-widget-border, #444)',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    overflow: 'hidden',
-    background: 'var(--vscode-sideBar-background, #252526)',
+    minWidth: 260,
+    borderRight: "1px solid var(--vscode-widget-border, #444)",
+    display: "flex",
+    flexDirection: "column" as const,
+    overflow: "hidden",
+    background: "var(--vscode-sideBar-background, #252526)",
   },
   header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '10px 12px',
-    borderBottom: '1px solid var(--vscode-widget-border, #444)',
-    fontSize: '11px',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 12px",
+    borderBottom: "1px solid var(--vscode-widget-border, #444)",
+    fontSize: "11px",
     fontWeight: 600,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.5px',
-    color: 'var(--vscode-sideBarTitle-foreground, #bbb)',
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+    color: "var(--vscode-sideBarTitle-foreground, #bbb)",
   },
   addBtn: {
-    background: 'var(--vscode-button-background, #0e639c)',
-    color: 'var(--vscode-button-foreground, #fff)',
-    border: 'none',
+    background: "var(--vscode-button-background, #0e639c)",
+    color: "var(--vscode-button-foreground, #fff)",
+    border: "none",
     borderRadius: 3,
-    padding: '3px 8px',
-    fontSize: '11px',
-    cursor: 'pointer',
+    padding: "3px 8px",
+    fontSize: "11px",
+    cursor: "pointer",
     fontWeight: 600,
   },
   searchBox: {
-    margin: '8px 10px',
-    padding: '4px 8px',
-    fontSize: '12px',
-    background: 'var(--vscode-input-background, #3c3c3c)',
-    color: 'var(--vscode-input-foreground, #ccc)',
-    border: '1px solid var(--vscode-input-border, transparent)',
+    margin: "8px 10px",
+    padding: "4px 8px",
+    fontSize: "12px",
+    background: "var(--vscode-input-background, #3c3c3c)",
+    color: "var(--vscode-input-foreground, #ccc)",
+    border: "1px solid var(--vscode-input-border, transparent)",
     borderRadius: 3,
-    outline: 'none',
-    width: 'calc(100% - 20px)',
+    outline: "none",
+    width: "calc(100% - 20px)",
   },
   list: {
     flex: 1,
-    overflowY: 'auto' as const,
-    padding: '4px 0',
+    overflowY: "auto" as const,
+    padding: "4px 0",
   },
   item: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '5px 12px',
-    cursor: 'pointer',
-    fontSize: '12px',
+    display: "flex",
+    alignItems: "center",
+    padding: "5px 12px",
+    cursor: "pointer",
+    fontSize: "14px",
     gap: 8,
-    position: 'relative' as const,
-    userSelect: 'none' as const,
+    position: "relative" as const,
+    userSelect: "none" as const,
   },
   itemHover: {
-    background: 'var(--vscode-list-hoverBackground, #2a2d2e)',
+    background: "var(--vscode-list-hoverBackground, #2a2d2e)",
   },
   itemSelected: {
-    background: 'var(--vscode-list-activeSelectionBackground, #094771)',
-    color: 'var(--vscode-list-activeSelectionForeground, #fff)',
+    background: "var(--vscode-list-activeSelectionBackground, #094771)",
+    color: "var(--vscode-list-activeSelectionForeground, #fff)",
   },
   methodBadge: {
-    display: 'inline-block',
+    display: "inline-block",
     fontWeight: 700,
-    fontSize: '10px',
-    textTransform: 'uppercase' as const,
+    fontSize: "10px",
+    textTransform: "uppercase" as const,
     width: 50,
-    textAlign: 'center' as const,
+    textAlign: "center" as const,
     borderRadius: 3,
-    padding: '2px 0',
-    lineHeight: '16px',
+    padding: "2px 0",
+    lineHeight: "16px",
     flexShrink: 0,
   },
   pathLabel: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
     flex: 1,
   },
   deleteBtn: {
     opacity: 0,
-    background: 'transparent',
-    color: 'var(--vscode-errorForeground, #f48771)',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '14px',
+    background: "transparent",
+    color: "var(--vscode-errorForeground, #f48771)",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "14px",
     lineHeight: 1,
-    padding: '0 4px',
+    padding: "0 4px",
     flexShrink: 0,
   },
   emptyState: {
-    color: 'var(--vscode-descriptionForeground, #9d9d9d)',
-    fontSize: '12px',
-    textAlign: 'center' as const,
-    padding: '24px 12px',
+    color: "var(--vscode-descriptionForeground, #9d9d9d)",
+    fontSize: "12px",
+    textAlign: "center" as const,
+    padding: "24px 12px",
   },
 };
 
@@ -139,13 +139,23 @@ export function Sidebar({
   onAdd,
   onDelete,
 }: SidebarProps): React.ReactElement {
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState("");
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
-  const allMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
+  const allMethods: HttpMethod[] = [
+    "get",
+    "post",
+    "put",
+    "delete",
+    "patch",
+    "head",
+    "options",
+    "trace",
+  ];
 
   // Build a flat list of (path, method) pairs
-  const entries: Array<{ path: string; method: HttpMethod; summary?: string }> = [];
+  const entries: Array<{ path: string; method: HttpMethod; summary?: string }> =
+    [];
   for (const [pathKey, pathItem] of Object.entries(paths)) {
     if (!pathItem) continue;
     for (const method of allMethods) {
@@ -188,7 +198,7 @@ export function Sidebar({
           <div style={styles.emptyState}>
             {entries.length === 0
               ? 'No endpoints yet. Click "+ Add" to create one.'
-              : 'No matching endpoints.'}
+              : "No matching endpoints."}
           </div>
         )}
 
@@ -213,8 +223,8 @@ export function Sidebar({
               <span
                 style={{
                   ...styles.methodBadge,
-                  background: METHOD_COLORS[entry.method] ?? '#666',
-                  color: '#fff',
+                  background: METHOD_COLORS[entry.method] ?? "#666",
+                  color: "#fff",
                 }}
               >
                 {entry.method}

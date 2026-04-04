@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { InfoEditor } from './components/InfoEditor';
 import { EndpointEditor } from './components/EndpointEditor';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
-import { validateDocument } from './utils/diagnostics';
+import { validateDocument, type Diagnostic } from './utils/diagnostics';
 
 // ─── Type definitions (mirrors yamlParser.ts on the Node side) ───────────────
 
@@ -166,6 +166,7 @@ export function App(): React.ReactElement {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<HttpMethod | null>(null);
+  const [spectralDiagnostics, setSpectralDiagnostics] = useState<Diagnostic[]>([]);
 
   // Use a ref to debounce outgoing edits so we don't flood the extension with
   // a postMessage on every keystroke.
@@ -194,6 +195,12 @@ export function App(): React.ReactElement {
 
         case 'error': {
           setFatalError(message.content as string);
+          break;
+        }
+
+        case 'diagnostics': {
+          const incoming = (message as { type: string; diagnostics: Diagnostic[] }).diagnostics;
+          setSpectralDiagnostics(incoming ?? []);
           break;
         }
 
@@ -309,10 +316,15 @@ export function App(): React.ReactElement {
   );
 
   // ── Real-time diagnostics (must be before any early returns — hooks rule) ──
-  const diagnostics = useMemo(() => {
+  const customDiagnostics = useMemo(() => {
     if (!doc) return [];
-    return validateDocument(doc);
+    return validateDocument(doc).map(d => ({ ...d, source: 'custom' as const }));
   }, [doc]);
+
+  // Merge custom (instant) + Spectral (async) diagnostics
+  const diagnostics = useMemo(() => {
+    return [...customDiagnostics, ...spectralDiagnostics];
+  }, [customDiagnostics, spectralDiagnostics]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
