@@ -1,5 +1,5 @@
 import { Spectral, type RulesetDefinition } from '@stoplight/spectral-core';
-import { truthy, falsy } from '@stoplight/spectral-functions';
+import { truthy, falsy, length, pattern } from '@stoplight/spectral-functions';
 import { oas } from '@stoplight/spectral-rulesets';
 
 // ─── Types (matches the webview Diagnostic interface) ───────────────────────
@@ -50,6 +50,72 @@ async function getSpectral(): Promise<Spectral> {
           severity: 1, // warning
           then: {
             function: falsy,
+          },
+        },
+
+        // API title must not be empty
+        'custom-info-title-non-empty': {
+          message: 'API title is required and cannot be empty.',
+          given: '$.info.title',
+          severity: 0, // error
+          then: {
+            function: length,
+            functionOptions: { min: 1 },
+          },
+        },
+
+        // API version must not be empty
+        'custom-info-version-non-empty': {
+          message: 'API version is required and cannot be empty.',
+          given: '$.info.version',
+          severity: 0, // error
+          then: {
+            function: length,
+            functionOptions: { min: 1 },
+          },
+        },
+
+        // Server URL must look like a valid URL
+        'custom-server-url-valid': {
+          message: 'Server URL "{{value}}" does not look like a valid URL.',
+          given: '$.servers[*].url',
+          severity: 1, // warning
+          then: {
+            function: pattern,
+            functionOptions: { match: '^(https?://|/)' },
+          },
+        },
+
+        // Operation summary should not be empty if present
+        'custom-operation-summary-non-empty': {
+          message: 'Operation summary should not be empty. Either add a meaningful summary or remove the field.',
+          given: '$.paths[*][get,post,put,delete,patch,head,options,trace].summary',
+          severity: 1, // warning
+          then: {
+            function: length,
+            functionOptions: { min: 1 },
+          },
+        },
+
+        // Response description should not be empty
+        'custom-response-description-non-empty': {
+          message: 'Response description should not be empty.',
+          given: '$.paths[*][*].responses[*].description',
+          severity: 1, // warning
+          then: {
+            function: length,
+            functionOptions: { min: 1 },
+          },
+        },
+
+        // Required fields must exist in properties
+        'custom-required-fields-exist': {
+          message: 'Object has "required" fields but no matching "properties" defined.',
+          given: '$.components.schemas[?(@.required && @.type==\'object\')]',
+          severity: 0, // error
+          then: {
+            field: 'properties',
+            function: truthy,
           },
         },
 
