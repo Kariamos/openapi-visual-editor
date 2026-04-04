@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { parseOpenApi, serializeOpenApi, validateOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
+import { parseOpenApi, serializeOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
 import { runSpectralValidation } from './utils/spectralValidator';
 
 export interface WebviewMessage {
@@ -77,11 +77,9 @@ export class OpenApiEditorProvider {
       return;
     }
 
-    const validationErrors = validateOpenApi(doc);
     const msg: WebviewMessage = {
       type: 'update',
       content: doc,
-      errors: validationErrors.map(e => `${e.path}: ${e.message}`),
     };
     this.panel.webview.postMessage(msg);
 

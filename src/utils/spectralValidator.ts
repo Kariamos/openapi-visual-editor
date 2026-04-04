@@ -1,4 +1,5 @@
 import { Spectral, Document, type RulesetDefinition } from '@stoplight/spectral-core';
+import { truthy } from '@stoplight/spectral-functions';
 import { oas } from '@stoplight/spectral-rulesets';
 
 // ─── Types (matches the webview Diagnostic interface) ───────────────────────
@@ -33,7 +34,33 @@ let spectralInstance: Spectral | null = null;
 async function getSpectral(): Promise<Spectral> {
   if (!spectralInstance) {
     spectralInstance = new Spectral();
-    spectralInstance.setRuleset({ extends: [oas as RulesetDefinition], rules: {} });
+    spectralInstance.setRuleset({
+      extends: [oas as RulesetDefinition],
+      rules: {
+        // ── Custom rules not covered by Spectral OAS ──────────────────────
+
+        // Warn when GET/DELETE/HEAD has a request body
+        'custom-no-request-body-on-get': {
+          message: '{{property}} with a request body is unusual and may not be supported by all clients.',
+          given: '$.paths[*][get,delete,head].requestBody',
+          severity: 1, // warning
+          then: {
+            function: { name: 'falsy' } as never,
+          },
+        },
+
+        // Suggest using 204 when 200/201 has no content
+        'custom-success-response-body': {
+          message: 'Response {{property}} has no content body. Consider adding a response schema, or use 204 for no-content responses.',
+          given: '$.paths[*][*].responses[200,201]',
+          severity: 3, // hint → maps to info
+          then: {
+            field: 'content',
+            function: truthy,
+          },
+        },
+      },
+    });
   }
   return spectralInstance;
 }
