@@ -318,6 +318,34 @@ export function App(): React.ReactElement {
     [doc, notifyExtension, selectedPath]
   );
 
+  // ── Method change ─────────────────────────────────────────────────────────
+  const handleMethodChange = useCallback(
+    (pathKey: string, oldMethod: HttpMethod, newMethod: HttpMethod) => {
+      if (!doc || oldMethod === newMethod) { return; }
+      const pathItem = doc.paths?.[pathKey];
+      if (!pathItem) { return; }
+      // Don't overwrite an existing method on this path
+      if (pathItem[newMethod]) { return; }
+
+      const operation = pathItem[oldMethod];
+      if (!operation) { return; }
+
+      // Rebuild the path item: remove old method, add new one
+      const newPathItem = { ...pathItem };
+      delete newPathItem[oldMethod];
+      newPathItem[newMethod] = operation;
+
+      const updated: OpenApiDocument = {
+        ...doc,
+        paths: { ...(doc.paths ?? {}), [pathKey]: newPathItem },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+      setSelectedMethod(newMethod);
+    },
+    [doc, notifyExtension]
+  );
+
   // ── Operation changes ─────────────────────────────────────────────────────
   const handleOperationChange = useCallback(
     (pathKey: string, method: HttpMethod, operation: OpenApiOperation) => {
@@ -465,6 +493,8 @@ export function App(): React.ReactElement {
                 operation={currentOperation}
                 onChange={(op) => handleOperationChange(selectedPath, selectedMethod, op)}
                 onPathChange={(newPath) => handlePathChange(selectedPath, newPath)}
+                onMethodChange={(m) => handleMethodChange(selectedPath, selectedMethod, m)}
+                usedMethods={Object.keys(doc.paths?.[selectedPath] ?? {}) as HttpMethod[]}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
                 availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
                 components={doc.components?.schemas ?? {}}
