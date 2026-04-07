@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { vscode } from './main';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, type SortMode } from './components/Sidebar';
 import { InfoEditor } from './components/InfoEditor';
 import { EndpointEditor } from './components/EndpointEditor';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
@@ -295,6 +295,37 @@ export function App(): React.ReactElement {
     [doc, notifyExtension, selectedPath, selectedMethod]
   );
 
+  // ── Path rename ───────────────────────────────────────────────────────────
+  const handlePathChange = useCallback(
+    (oldPath: string, newPath: string) => {
+      if (!doc || oldPath === newPath) { return; }
+      // Ensure new path starts with /
+      const sanitized = newPath.startsWith('/') ? newPath : `/${newPath}`;
+      if (sanitized === oldPath) { return; }
+      // Avoid overwriting an existing path
+      if (doc.paths?.[sanitized]) { return; }
+
+      const oldPaths = doc.paths ?? {};
+      const newPaths: OpenApiPaths = {};
+      // Rebuild paths, replacing the old key with the new one (preserves order)
+      for (const [key, value] of Object.entries(oldPaths)) {
+        if (key === oldPath) {
+          newPaths[sanitized] = value;
+        } else {
+          newPaths[key] = value;
+        }
+      }
+
+      const updated = { ...doc, paths: newPaths };
+      setDoc(updated);
+      notifyExtension(updated);
+      if (selectedPath === oldPath) {
+        setSelectedPath(sanitized);
+      }
+    },
+    [doc, notifyExtension, selectedPath]
+  );
+
   // ── Operation changes ─────────────────────────────────────────────────────
   const handleOperationChange = useCallback(
     (pathKey: string, method: HttpMethod, operation: OpenApiOperation) => {
@@ -309,6 +340,72 @@ export function App(): React.ReactElement {
           },
         },
       };
+      setDoc(updated);
+      notifyExtension(updated);
+    },
+    [doc, notifyExtension]
+  );
+
+  // ── Sort endpoints ────────────────────────────────────────────────────────
+  const handleSort = useCallback(
+    (mode: SortMode) => {
+      if (!doc || !doc.paths) return;
+
+      const pathEntries = Object.entries(doc.paths);
+      const allMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
+
+      let sorted: typeof pathEntries;
+
+      switch (mode) {
+        case 'path-asc':
+          sorted = [...pathEntries].sort((a, b) => a[0].localeCompare(b[0]));
+          break;
+        case 'path-desc':
+          sorted = [...pathEntries].sort((a, b) => b[0].localeCompare(a[0]));
+          break;
+        case 'method': {
+          // Sort by the first HTTP method found in each path item
+          const methodOrder = (entry: typeof pathEntries[0]): number => {
+            const pathItem = entry[1];
+            if (!pathItem) return 99;
+            for (let i = 0; i < allMethods.length; i++) {
+              if (pathItem[allMethods[i]]) return i;
+            }
+            return 99;
+          };
+          sorted = [...pathEntries].sort((a, b) => {
+            const diff = methodOrder(a) - methodOrder(b);
+            return diff !== 0 ? diff : a[0].localeCompare(b[0]);
+          });
+          break;
+        }
+        case 'tag': {
+          // Sort by the first tag of the first operation
+          const firstTag = (entry: typeof pathEntries[0]): string => {
+            const pathItem = entry[1];
+            if (!pathItem) return '\uffff';
+            for (const m of allMethods) {
+              const op = pathItem[m];
+              if (op?.tags && op.tags.length > 0) return op.tags[0].toLowerCase();
+            }
+            return '\uffff';
+          };
+          sorted = [...pathEntries].sort((a, b) => {
+            const diff = firstTag(a).localeCompare(firstTag(b));
+            return diff !== 0 ? diff : a[0].localeCompare(b[0]);
+          });
+          break;
+        }
+        default:
+          sorted = pathEntries;
+      }
+
+      const newPaths: OpenApiPaths = {};
+      for (const [key, value] of sorted) {
+        newPaths[key] = value;
+      }
+
+      const updated = { ...doc, paths: newPaths };
       setDoc(updated);
       notifyExtension(updated);
     },
@@ -362,6 +459,7 @@ export function App(): React.ReactElement {
           onSelect={handleSelect}
           onAdd={handleAddEndpoint}
           onDelete={handleDeleteEndpoint}
+          onSort={handleSort}
         />
 
         <div style={styles.rightPanel}>
@@ -375,6 +473,7 @@ export function App(): React.ReactElement {
                 method={selectedMethod}
                 operation={currentOperation}
                 onChange={(op) => handleOperationChange(selectedPath, selectedMethod, op)}
+                onPathChange={(newPath) => handlePathChange(selectedPath, newPath)}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
                 availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
                 components={doc.components?.schemas ?? {}}

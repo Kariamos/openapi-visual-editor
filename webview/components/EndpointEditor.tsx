@@ -163,6 +163,7 @@ interface EndpointEditorProps {
   method: HttpMethod;
   operation: OpenApiOperation;
   onChange: (operation: OpenApiOperation) => void;
+  onPathChange?: (newPath: string) => void;
   availableSchemes?: string[];
   availableRefs?: string[];
   components?: Record<string, OpenApiSchema>;
@@ -176,12 +177,15 @@ export function EndpointEditor({
   method,
   operation,
   onChange,
+  onPathChange,
   availableSchemes = [],
   availableRefs = [],
   components = {},
   servers = [],
 }: EndpointEditorProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState('general');
+  const [editingPath, setEditingPath] = useState(false);
+  const [pathDraft, setPathDraft] = useState(path);
 
   const updateField = useCallback(
     (field: string, value: unknown) => {
@@ -322,7 +326,47 @@ export function EndpointEditor({
         <span style={{ ...styles.methodBadge, background: METHOD_COLORS[method] ?? '#666' }}>
           {method}
         </span>
-        <span style={styles.pathText}>{path}</span>
+        {editingPath ? (
+          <input
+            autoFocus
+            style={{
+              ...styles.pathText,
+              background: 'var(--vscode-input-background, #3c3c3c)',
+              border: '1px solid var(--vscode-focusBorder, #007fd4)',
+              borderRadius: 3,
+              padding: '2px 6px',
+              outline: 'none',
+              flex: 1,
+            }}
+            value={pathDraft}
+            onChange={(e) => setPathDraft(e.target.value)}
+            onBlur={() => {
+              setEditingPath(false);
+              if (pathDraft && pathDraft !== path) {
+                onPathChange?.(pathDraft);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setEditingPath(false);
+                if (pathDraft && pathDraft !== path) {
+                  onPathChange?.(pathDraft);
+                }
+              } else if (e.key === 'Escape') {
+                setEditingPath(false);
+                setPathDraft(path);
+              }
+            }}
+          />
+        ) : (
+          <span
+            style={{ ...styles.pathText, cursor: 'pointer' }}
+            onClick={() => { setPathDraft(path); setEditingPath(true); }}
+            title="Click to edit path"
+          >
+            {path}
+          </span>
+        )}
       </div>
 
       {/* Tab bar */}
