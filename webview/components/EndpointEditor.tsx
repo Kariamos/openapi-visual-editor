@@ -2,19 +2,7 @@ import React, { useCallback, useState } from 'react';
 import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, OpenApiSchema, HttpMethod } from '../App';
 import { ContentBodyEditor } from './SchemaEditor';
 import { ExamplesEditor } from './ExamplesEditor';
-
-// ─── Method color map ───────────────────────────────────────────────────────
-
-const METHOD_COLORS: Record<string, string> = {
-  get: '#61affe',
-  post: '#49cc90',
-  put: '#fca130',
-  delete: '#f93e3e',
-  patch: '#50e3c2',
-  head: '#9012fe',
-  options: '#0d5aa7',
-  trace: '#666',
-};
+import { METHOD_COLORS } from '../utils/constants';
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +63,7 @@ const styles = {
     border: '1px solid var(--vscode-input-border, transparent)',
     borderRadius: 3,
     outline: 'none',
+    boxSizing: 'border-box' as const,
   },
   textarea: {
     width: '100%',
@@ -88,6 +77,7 @@ const styles = {
     minHeight: 50,
     resize: 'vertical' as const,
     fontFamily: 'inherit',
+    boxSizing: 'border-box' as const,
   },
   select: {
     padding: '5px 8px',

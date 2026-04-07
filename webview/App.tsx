@@ -5,6 +5,7 @@ import { InfoEditor } from './components/InfoEditor';
 import { EndpointEditor } from './components/EndpointEditor';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { validateDocument, type Diagnostic } from './utils/diagnostics';
+import { HTTP_METHODS } from './utils/constants';
 
 // ─── Type definitions (mirrors yamlParser.ts on the Node side) ───────────────
 
@@ -112,13 +113,6 @@ const styles = {
     maxHeight: '80px',
     overflowY: 'auto' as const,
   },
-  warningBanner: {
-    background: 'var(--vscode-inputValidation-warningBackground, #352a05)',
-    borderBottom: '1px solid var(--vscode-inputValidation-warningBorder, #b89500)',
-    color: 'var(--vscode-inputValidation-warningForeground, #cca700)',
-    padding: '6px 12px',
-    fontSize: '12px',
-  },
   mainArea: {
     display: 'flex',
     flex: 1,
@@ -162,7 +156,6 @@ const styles = {
 
 export function App(): React.ReactElement {
   const [doc, setDoc] = useState<OpenApiDocument | null>(null);
-  const [_errors, setErrors] = useState<string[]>([]);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<HttpMethod | null>(null);
@@ -181,7 +174,6 @@ export function App(): React.ReactElement {
         case 'update': {
           const incoming = message.content as OpenApiDocument;
           setDoc(incoming);
-          setErrors(message.errors ?? []);
           setFatalError(null);
 
           // If the currently-selected path/method no longer exists after a
@@ -352,7 +344,6 @@ export function App(): React.ReactElement {
       if (!doc || !doc.paths) return;
 
       const pathEntries = Object.entries(doc.paths);
-      const allMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
 
       let sorted: typeof pathEntries;
 
@@ -368,8 +359,8 @@ export function App(): React.ReactElement {
           const methodOrder = (entry: typeof pathEntries[0]): number => {
             const pathItem = entry[1];
             if (!pathItem) return 99;
-            for (let i = 0; i < allMethods.length; i++) {
-              if (pathItem[allMethods[i]]) return i;
+            for (let i = 0; i < HTTP_METHODS.length; i++) {
+              if (pathItem[HTTP_METHODS[i]]) return i;
             }
             return 99;
           };
@@ -384,7 +375,7 @@ export function App(): React.ReactElement {
           const firstTag = (entry: typeof pathEntries[0]): string => {
             const pathItem = entry[1];
             if (!pathItem) return '\uffff';
-            for (const m of allMethods) {
+            for (const m of HTTP_METHODS) {
               const op = pathItem[m];
               if (op?.tags && op.tags.length > 0) return op.tags[0].toLowerCase();
             }

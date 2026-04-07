@@ -1,18 +1,6 @@
 import React, { useState } from "react";
 import type { OpenApiPaths, HttpMethod } from "../App";
-
-// ─── Method color map ───────────────────────────────────────────────────────
-
-const METHOD_COLORS: Record<string, string> = {
-  get: "#61affe",
-  post: "#49cc90",
-  put: "#fca130",
-  delete: "#f93e3e",
-  patch: "#50e3c2",
-  head: "#9012fe",
-  options: "#0d5aa7",
-  trace: "#666",
-};
+import { METHOD_COLORS, HTTP_METHODS } from "../utils/constants";
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -154,23 +142,12 @@ export function Sidebar({
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
 
-  const allMethods: HttpMethod[] = [
-    "get",
-    "post",
-    "put",
-    "delete",
-    "patch",
-    "head",
-    "options",
-    "trace",
-  ];
-
   // Build a flat list of (path, method) pairs
   const entries: Array<{ path: string; method: HttpMethod; summary?: string }> =
     [];
   for (const [pathKey, pathItem] of Object.entries(paths)) {
     if (!pathItem) continue;
-    for (const method of allMethods) {
+    for (const method of HTTP_METHODS) {
       const op = pathItem[method];
       if (op) {
         entries.push({ path: pathKey, method, summary: op.summary });
