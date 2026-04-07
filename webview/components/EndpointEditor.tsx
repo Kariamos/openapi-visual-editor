@@ -2,19 +2,7 @@ import React, { useCallback, useState } from 'react';
 import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, OpenApiSchema, HttpMethod } from '../App';
 import { ContentBodyEditor } from './SchemaEditor';
 import { ExamplesEditor } from './ExamplesEditor';
-
-// ─── Method color map ───────────────────────────────────────────────────────
-
-const METHOD_COLORS: Record<string, string> = {
-  get: '#61affe',
-  post: '#49cc90',
-  put: '#fca130',
-  delete: '#f93e3e',
-  patch: '#50e3c2',
-  head: '#9012fe',
-  options: '#0d5aa7',
-  trace: '#666',
-};
+import { METHOD_COLORS } from '../utils/constants';
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +63,7 @@ const styles = {
     border: '1px solid var(--vscode-input-border, transparent)',
     borderRadius: 3,
     outline: 'none',
+    boxSizing: 'border-box' as const,
   },
   textarea: {
     width: '100%',
@@ -88,6 +77,7 @@ const styles = {
     minHeight: 50,
     resize: 'vertical' as const,
     fontFamily: 'inherit',
+    boxSizing: 'border-box' as const,
   },
   select: {
     padding: '5px 8px',
@@ -163,6 +153,7 @@ interface EndpointEditorProps {
   method: HttpMethod;
   operation: OpenApiOperation;
   onChange: (operation: OpenApiOperation) => void;
+  onPathChange?: (newPath: string) => void;
   availableSchemes?: string[];
   availableRefs?: string[];
   components?: Record<string, OpenApiSchema>;
@@ -176,12 +167,15 @@ export function EndpointEditor({
   method,
   operation,
   onChange,
+  onPathChange,
   availableSchemes = [],
   availableRefs = [],
   components = {},
   servers = [],
 }: EndpointEditorProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState('general');
+  const [editingPath, setEditingPath] = useState(false);
+  const [pathDraft, setPathDraft] = useState(path);
 
   const updateField = useCallback(
     (field: string, value: unknown) => {
@@ -322,7 +316,47 @@ export function EndpointEditor({
         <span style={{ ...styles.methodBadge, background: METHOD_COLORS[method] ?? '#666' }}>
           {method}
         </span>
-        <span style={styles.pathText}>{path}</span>
+        {editingPath ? (
+          <input
+            autoFocus
+            style={{
+              ...styles.pathText,
+              background: 'var(--vscode-input-background, #3c3c3c)',
+              border: '1px solid var(--vscode-focusBorder, #007fd4)',
+              borderRadius: 3,
+              padding: '2px 6px',
+              outline: 'none',
+              flex: 1,
+            }}
+            value={pathDraft}
+            onChange={(e) => setPathDraft(e.target.value)}
+            onBlur={() => {
+              setEditingPath(false);
+              if (pathDraft && pathDraft !== path) {
+                onPathChange?.(pathDraft);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setEditingPath(false);
+                if (pathDraft && pathDraft !== path) {
+                  onPathChange?.(pathDraft);
+                }
+              } else if (e.key === 'Escape') {
+                setEditingPath(false);
+                setPathDraft(path);
+              }
+            }}
+          />
+        ) : (
+          <span
+            style={{ ...styles.pathText, cursor: 'pointer' }}
+            onClick={() => { setPathDraft(path); setEditingPath(true); }}
+            title="Click to edit path"
+          >
+            {path}
+          </span>
+        )}
       </div>
 
       {/* Tab bar */}

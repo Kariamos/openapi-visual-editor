@@ -1,18 +1,6 @@
 import React, { useState } from "react";
 import type { OpenApiPaths, HttpMethod } from "../App";
-
-// ─── Method color map ───────────────────────────────────────────────────────
-
-const METHOD_COLORS: Record<string, string> = {
-  get: "#61affe",
-  post: "#49cc90",
-  put: "#fca130",
-  delete: "#f93e3e",
-  patch: "#50e3c2",
-  head: "#9012fe",
-  options: "#0d5aa7",
-  trace: "#666",
-};
+import { METHOD_COLORS, HTTP_METHODS } from "../utils/constants";
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -120,6 +108,8 @@ const styles = {
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
+export type SortMode = 'path-asc' | 'path-desc' | 'method' | 'tag';
+
 interface SidebarProps {
   paths: OpenApiPaths;
   selectedPath: string | null;
@@ -127,9 +117,17 @@ interface SidebarProps {
   onSelect: (path: string, method: HttpMethod) => void;
   onAdd: () => void;
   onDelete: (path: string, method: HttpMethod) => void;
+  onSort: (mode: SortMode) => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
+
+const SORT_LABELS: Record<SortMode, string> = {
+  'path-asc': 'Path A\u2192Z',
+  'path-desc': 'Path Z\u2192A',
+  'method': 'HTTP Method',
+  'tag': 'Tag',
+};
 
 export function Sidebar({
   paths,
@@ -138,27 +136,18 @@ export function Sidebar({
   onSelect,
   onAdd,
   onDelete,
+  onSort,
 }: SidebarProps): React.ReactElement {
   const [filter, setFilter] = useState("");
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-
-  const allMethods: HttpMethod[] = [
-    "get",
-    "post",
-    "put",
-    "delete",
-    "patch",
-    "head",
-    "options",
-    "trace",
-  ];
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   // Build a flat list of (path, method) pairs
   const entries: Array<{ path: string; method: HttpMethod; summary?: string }> =
     [];
   for (const [pathKey, pathItem] of Object.entries(paths)) {
     if (!pathItem) continue;
-    for (const method of allMethods) {
+    for (const method of HTTP_METHODS) {
       const op = pathItem[method];
       if (op) {
         entries.push({ path: pathKey, method, summary: op.summary });
@@ -180,9 +169,64 @@ export function Sidebar({
     <div style={styles.sidebar}>
       <div style={styles.header}>
         <span>Endpoints</span>
-        <button style={styles.addBtn} onClick={onAdd} title="Add new endpoint">
-          + Add
-        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ position: 'relative' }}>
+            <button
+              style={{
+                ...styles.addBtn,
+                background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                color: 'var(--vscode-button-secondaryForeground, #ccc)',
+              }}
+              onClick={() => setShowSortMenu(!showSortMenu)}
+              title="Sort endpoints"
+            >
+              {'\u2195'} Sort
+            </button>
+            {showSortMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 4,
+                background: 'var(--vscode-menu-background, #252526)',
+                border: '1px solid var(--vscode-menu-border, #454545)',
+                borderRadius: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                zIndex: 100,
+                minWidth: 150,
+                padding: '4px 0',
+              }}>
+                {(['path-asc', 'path-desc', 'method', 'tag'] as SortMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '6px 12px',
+                      background: 'transparent',
+                      color: 'var(--vscode-menu-foreground, #ccc)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--vscode-menu-selectionBackground, #094771)'; }}
+                    onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+                    onClick={() => {
+                      onSort(mode);
+                      setShowSortMenu(false);
+                    }}
+                  >
+                    {SORT_LABELS[mode]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button style={styles.addBtn} onClick={onAdd} title="Add new endpoint">
+            + Add
+          </button>
+        </div>
       </div>
 
       <input

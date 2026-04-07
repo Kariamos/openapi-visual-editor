@@ -1,4 +1,5 @@
-import type { OpenApiDocument, OpenApiOperation, OpenApiSchema, HttpMethod } from '../App';
+import type { OpenApiDocument, OpenApiOperation, OpenApiSchema } from '../App';
+import { HTTP_METHODS } from './constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,26 +50,14 @@ export function validateDocument(doc: OpenApiDocument): Diagnostic[] {
 function validateOperationHints(doc: OpenApiDocument, out: Diagnostic[]): void {
   if (!doc.paths) return;
 
-  const allMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
-
   for (const [pathKey, pathItem] of Object.entries(doc.paths)) {
     if (!pathItem) continue;
 
-    for (const method of allMethods) {
+    for (const method of HTTP_METHODS) {
       const op = pathItem[method];
       if (!op) continue;
 
       const opPath = `paths.${pathKey}.${method.toUpperCase()}`;
-
-      // Request body on GET/DELETE/HEAD is unusual — Spectral doesn't check this
-      if (op.requestBody && ['get', 'head', 'delete'].includes(method)) {
-        out.push({
-          severity: 'warning',
-          path: `${opPath}.requestBody`,
-          message: `${method.toUpperCase()} with a request body is unusual and may not be supported by all clients.`,
-          category: 'operations',
-        });
-      }
 
       // Validate media type format in request body
       if (op.requestBody?.content) {
@@ -91,16 +80,6 @@ function validateResponseContentHints(
   for (const [code, respObj] of Object.entries(responses)) {
     const respPath = `${basePath}.responses.${code}`;
     const resp = respObj as Record<string, unknown>;
-
-    // 200/201 with no content body — suggest 204 or adding a schema
-    if (['200', '201'].includes(code) && !resp.content) {
-      out.push({
-        severity: 'info',
-        path: respPath,
-        message: `Response ${code} has no content body. Consider adding a response schema, or use 204 for no-content responses.`,
-        category: 'responses',
-      });
-    }
 
     // Validate media type format in responses
     if (resp.content && typeof resp.content === 'object') {
