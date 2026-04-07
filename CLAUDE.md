@@ -26,7 +26,7 @@ npm run compile         # tsc → out/
 
 - `src/extension.ts` → registers `openapi-visual-editor.openVisualEditor` command, manages panel map
 - `src/editorProvider.ts` → reads YAML file, posts parsed object to WebView via `postMessage`, writes back on `edit` messages, watches file for external changes
-- `src/utils/yamlParser.ts` → `parseOpenApi()`, `serializeOpenApi()`, `validateOpenApi()`, `looksLikeOpenApi()` using `js-yaml`
+- `src/utils/yamlParser.ts` → `parseOpenApi()`, `serializeOpenApi()`, `looksLikeOpenApi()` using `js-yaml`
 - `webview/App.tsx` → root component, all OpenAPI TypeScript types, state management, debounced sync (400ms)
 - `webview/components/Sidebar.tsx` → endpoint list, filter, add/delete
 - `webview/components/InfoEditor.tsx` → API info form (title, version, description)
