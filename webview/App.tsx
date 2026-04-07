@@ -295,6 +295,37 @@ export function App(): React.ReactElement {
     [doc, notifyExtension, selectedPath, selectedMethod]
   );
 
+  // ── Path rename ───────────────────────────────────────────────────────────
+  const handlePathChange = useCallback(
+    (oldPath: string, newPath: string) => {
+      if (!doc || oldPath === newPath) { return; }
+      // Ensure new path starts with /
+      const sanitized = newPath.startsWith('/') ? newPath : `/${newPath}`;
+      if (sanitized === oldPath) { return; }
+      // Avoid overwriting an existing path
+      if (doc.paths?.[sanitized]) { return; }
+
+      const oldPaths = doc.paths ?? {};
+      const newPaths: OpenApiPaths = {};
+      // Rebuild paths, replacing the old key with the new one (preserves order)
+      for (const [key, value] of Object.entries(oldPaths)) {
+        if (key === oldPath) {
+          newPaths[sanitized] = value;
+        } else {
+          newPaths[key] = value;
+        }
+      }
+
+      const updated = { ...doc, paths: newPaths };
+      setDoc(updated);
+      notifyExtension(updated);
+      if (selectedPath === oldPath) {
+        setSelectedPath(sanitized);
+      }
+    },
+    [doc, notifyExtension, selectedPath]
+  );
+
   // ── Operation changes ─────────────────────────────────────────────────────
   const handleOperationChange = useCallback(
     (pathKey: string, method: HttpMethod, operation: OpenApiOperation) => {
@@ -442,6 +473,7 @@ export function App(): React.ReactElement {
                 method={selectedMethod}
                 operation={currentOperation}
                 onChange={(op) => handleOperationChange(selectedPath, selectedMethod, op)}
+                onPathChange={(newPath) => handlePathChange(selectedPath, newPath)}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
                 availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
                 components={doc.components?.schemas ?? {}}
