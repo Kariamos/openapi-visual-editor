@@ -67,11 +67,6 @@ export interface OpenApiDocument {
   [key: string]: unknown;
 }
 
-export interface ValidationError {
-  path: string;
-  message: string;
-}
-
 /**
  * Parses a YAML string into an OpenAPI document object.
  * Throws an error with line information if the YAML is invalid.
@@ -114,89 +109,6 @@ export function serializeOpenApi(obj: OpenApiDocument): string {
     forceQuotes: false,
     schema: yaml.DEFAULT_SCHEMA,
   });
-}
-
-/**
- * Performs basic structural validation on a parsed OpenAPI document.
- * Returns an array of human-readable error strings. An empty array means
- * the document passed all checks.
- */
-export function validateOpenApi(obj: unknown): ValidationError[] {
-  const errors: ValidationError[] = [];
-
-  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
-    errors.push({ path: '(root)', message: 'Document must be an object.' });
-    return errors;
-  }
-
-  const doc = obj as Record<string, unknown>;
-
-  // openapi field
-  if (!('openapi' in doc)) {
-    errors.push({ path: 'openapi', message: 'Missing required field "openapi".' });
-  } else if (typeof doc['openapi'] !== 'string') {
-    errors.push({ path: 'openapi', message: '"openapi" must be a string (e.g. "3.0.3").' });
-  } else if (!/^3\.\d+\.\d+$/.test(doc['openapi'] as string)) {
-    errors.push({
-      path: 'openapi',
-      message: `"openapi" value "${doc['openapi']}" does not look like an OpenAPI 3.x version string.`,
-    });
-  }
-
-  // info block
-  if (!('info' in doc)) {
-    errors.push({ path: 'info', message: 'Missing required field "info".' });
-  } else {
-    const info = doc['info'] as Record<string, unknown>;
-    if (typeof info !== 'object' || info === null) {
-      errors.push({ path: 'info', message: '"info" must be an object.' });
-    } else {
-      if (!info['title'] || typeof info['title'] !== 'string') {
-        errors.push({ path: 'info.title', message: '"info.title" is required and must be a non-empty string.' });
-      }
-      if (!info['version'] || typeof info['version'] !== 'string') {
-        errors.push({ path: 'info.version', message: '"info.version" is required and must be a non-empty string.' });
-      }
-    }
-  }
-
-  // paths block (optional but must be object if present)
-  if ('paths' in doc && doc['paths'] !== null) {
-    if (typeof doc['paths'] !== 'object' || Array.isArray(doc['paths'])) {
-      errors.push({ path: 'paths', message: '"paths" must be an object.' });
-    } else {
-      const paths = doc['paths'] as Record<string, unknown>;
-      const validMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
-
-      for (const [pathKey, pathItem] of Object.entries(paths)) {
-        if (!pathKey.startsWith('/')) {
-          errors.push({ path: `paths.${pathKey}`, message: `Path "${pathKey}" must start with "/".` });
-        }
-        if (typeof pathItem !== 'object' || pathItem === null) {
-          errors.push({ path: `paths.${pathKey}`, message: `Path item for "${pathKey}" must be an object.` });
-          continue;
-        }
-        const pathObj = pathItem as Record<string, unknown>;
-        for (const method of validMethods) {
-          if (method in pathObj) {
-            const op = pathObj[method] as Record<string, unknown>;
-            if (typeof op !== 'object' || op === null) {
-              errors.push({ path: `paths.${pathKey}.${method}`, message: 'Operation must be an object.' });
-              continue;
-            }
-            if (!('responses' in op)) {
-              errors.push({
-                path: `paths.${pathKey}.${method}.responses`,
-                message: `Operation ${method.toUpperCase()} ${pathKey} is missing "responses".`,
-              });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return errors;
 }
 
 /**
