@@ -34,6 +34,7 @@ const styles = {
     border: '1px solid var(--vscode-input-border, transparent)',
     borderRadius: 3,
     outline: 'none',
+    boxSizing: 'border-box' as const,
   },
   textarea: {
     width: '100%',
@@ -47,6 +48,7 @@ const styles = {
     minHeight: 60,
     resize: 'vertical' as const,
     fontFamily: 'inherit',
+    boxSizing: 'border-box' as const,
   },
   row: {
     display: 'flex',

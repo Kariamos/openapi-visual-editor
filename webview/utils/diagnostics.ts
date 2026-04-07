@@ -1,4 +1,5 @@
-import type { OpenApiDocument, OpenApiOperation, OpenApiSchema, HttpMethod } from '../App';
+import type { OpenApiDocument, OpenApiOperation, OpenApiSchema } from '../App';
+import { HTTP_METHODS } from './constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,12 +50,10 @@ export function validateDocument(doc: OpenApiDocument): Diagnostic[] {
 function validateOperationHints(doc: OpenApiDocument, out: Diagnostic[]): void {
   if (!doc.paths) return;
 
-  const allMethods: HttpMethod[] = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'];
-
   for (const [pathKey, pathItem] of Object.entries(doc.paths)) {
     if (!pathItem) continue;
 
-    for (const method of allMethods) {
+    for (const method of HTTP_METHODS) {
       const op = pathItem[method];
       if (!op) continue;
 
