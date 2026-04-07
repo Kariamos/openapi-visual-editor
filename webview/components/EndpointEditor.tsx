@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, OpenApiSchema, HttpMethod } from '../App';
 import { ContentBodyEditor } from './SchemaEditor';
 import { ExamplesEditor } from './ExamplesEditor';
-import { METHOD_COLORS } from '../utils/constants';
+import { METHOD_COLORS, HTTP_METHODS, HTTP_STATUS_CODES } from '../utils/constants';
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -154,6 +154,8 @@ interface EndpointEditorProps {
   operation: OpenApiOperation;
   onChange: (operation: OpenApiOperation) => void;
   onPathChange?: (newPath: string) => void;
+  onMethodChange?: (newMethod: HttpMethod) => void;
+  usedMethods?: HttpMethod[];
   availableSchemes?: string[];
   availableRefs?: string[];
   components?: Record<string, OpenApiSchema>;
@@ -168,6 +170,8 @@ export function EndpointEditor({
   operation,
   onChange,
   onPathChange,
+  onMethodChange,
+  usedMethods = [],
   availableSchemes = [],
   availableRefs = [],
   components = {},
@@ -231,18 +235,14 @@ export function EndpointEditor({
 
   // ── Responses ───────────────────────────────────────────────────────────
 
-  const addResponse = useCallback(() => {
+  const addResponse = useCallback((code: string) => {
     const responses = { ...(operation.responses ?? {}) };
-    // Find an unused status code
-    let code = '200';
-    const codes = ['200', '201', '204', '400', '401', '403', '404', '500'];
-    for (const c of codes) {
-      if (!(c in responses)) {
-        code = c;
-        break;
-      }
-    }
-    responses[code] = { description: '' };
+    if (code in responses) return;
+    // Find the description from the status codes constant
+    const desc = HTTP_STATUS_CODES
+      .flatMap(g => g.codes)
+      .find(c => c.code === code)?.desc ?? '';
+    responses[code] = { description: desc };
     updateField('responses', responses);
   }, [operation.responses, updateField]);
 
@@ -313,9 +313,28 @@ export function EndpointEditor({
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <span style={{ ...styles.methodBadge, background: METHOD_COLORS[method] ?? '#666' }}>
-          {method}
-        </span>
+        <select
+          style={{
+            ...styles.methodBadge,
+            background: METHOD_COLORS[method] ?? '#666',
+            border: 'none',
+            cursor: 'pointer',
+            appearance: 'none',
+            WebkitAppearance: 'none',
+            paddingRight: 18,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='white'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 6px center',
+          }}
+          value={method}
+          onChange={(e) => onMethodChange?.(e.target.value as HttpMethod)}
+        >
+          {HTTP_METHODS.map((m) => (
+            <option key={m} value={m} disabled={m !== method && usedMethods.includes(m)}>
+              {m.toUpperCase()}{m !== method && usedMethods.includes(m) ? ' (in use)' : ''}
+            </option>
+          ))}
+        </select>
         {editingPath ? (
           <input
             autoFocus
@@ -535,11 +554,28 @@ export function EndpointEditor({
       {activeTab === 'responses' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-            <button style={styles.addBtn} onClick={addResponse}>+ Add Response</button>
+            <select
+              style={{ ...styles.select, fontSize: '11px', color: 'var(--vscode-textLink-foreground, #3794ff)' }}
+              value=""
+              onChange={(e) => { if (e.target.value) addResponse(e.target.value); }}
+            >
+              <option value="">+ Add Response</option>
+              {HTTP_STATUS_CODES.map((group) => {
+                const available = group.codes.filter(c => !(c.code in (operation.responses ?? {})));
+                if (available.length === 0) return null;
+                return (
+                  <optgroup key={group.group} label={group.group}>
+                    {available.map(c => (
+                      <option key={c.code} value={c.code}>{c.code} — {c.desc}</option>
+                    ))}
+                  </optgroup>
+                );
+              })}
+            </select>
           </div>
           {Object.keys(operation.responses ?? {}).length === 0 && (
             <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground, #9d9d9d)', textAlign: 'center', padding: '24px 0' }}>
-              No responses defined. Click "+ Add Response" to create one.
+              No responses defined. Select a status code above to create one.
             </div>
           )}
           {Object.entries(operation.responses ?? {}).map(([code, response]) => (
