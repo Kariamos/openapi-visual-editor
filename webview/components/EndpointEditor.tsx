@@ -1,148 +1,160 @@
-import React, { useCallback, useState } from 'react';
-import type { OpenApiOperation, OpenApiParameter, OpenApiResponse, OpenApiSchema, HttpMethod } from '../App';
-import { ContentBodyEditor } from './SchemaEditor';
-import { ExamplesEditor } from './ExamplesEditor';
-import { METHOD_COLORS, HTTP_METHODS, HTTP_STATUS_CODES } from '../utils/constants';
+import React, { useCallback, useState } from "react";
+import type {
+  OpenApiOperation,
+  OpenApiParameter,
+  OpenApiResponse,
+  OpenApiSchema,
+  HttpMethod,
+} from "../App";
+import { ContentBodyEditor } from "./SchemaEditor";
+import { ExamplesEditor } from "./ExamplesEditor";
+import {
+  METHOD_COLORS,
+  HTTP_METHODS,
+  HTTP_STATUS_CODES,
+} from "../utils/constants";
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = {
   container: {
-    fontSize: '13px',
+    fontSize: "13px",
   },
   header: {
-    display: 'flex',
-    alignItems: 'center',
+    display: "flex",
+    alignItems: "center",
     gap: 10,
     marginBottom: 16,
   },
   methodBadge: {
     fontWeight: 700,
-    fontSize: '12px',
-    textTransform: 'uppercase' as const,
-    padding: '4px 10px',
+    fontSize: "12px",
+    textTransform: "uppercase" as const,
+    padding: "4px 10px",
     borderRadius: 4,
-    color: '#fff',
+    color: "#fff",
+    width: "auto",
+    flexShrink: 0,
   },
   pathText: {
-    fontSize: '15px',
+    fontSize: "15px",
     fontWeight: 600,
-    fontFamily: 'var(--vscode-editor-font-family, monospace)',
-    color: 'var(--vscode-editor-foreground, #ccc)',
+    fontFamily: "var(--vscode-editor-font-family, monospace)",
+    color: "var(--vscode-editor-foreground, #ccc)",
   },
   section: {
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: '11px',
+    fontSize: "11px",
     fontWeight: 600,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.5px',
-    color: 'var(--vscode-sideBarTitle-foreground, #bbb)',
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+    color: "var(--vscode-sideBarTitle-foreground, #bbb)",
     marginBottom: 8,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   fieldGroup: {
     marginBottom: 10,
   },
   label: {
-    display: 'block',
-    fontSize: '11px',
-    color: 'var(--vscode-descriptionForeground, #9d9d9d)',
+    display: "block",
+    fontSize: "11px",
+    color: "var(--vscode-descriptionForeground, #9d9d9d)",
     marginBottom: 3,
     fontWeight: 500,
   },
   input: {
-    width: '100%',
-    padding: '5px 8px',
-    fontSize: '13px',
-    background: 'var(--vscode-input-background, #3c3c3c)',
-    color: 'var(--vscode-input-foreground, #ccc)',
-    border: '1px solid var(--vscode-input-border, transparent)',
+    width: "100%",
+    padding: "5px 8px",
+    fontSize: "13px",
+    background: "var(--vscode-input-background, #3c3c3c)",
+    color: "var(--vscode-input-foreground, #ccc)",
+    border: "1px solid var(--vscode-input-border, transparent)",
     borderRadius: 3,
-    outline: 'none',
-    boxSizing: 'border-box' as const,
+    outline: "none",
+    boxSizing: "border-box" as const,
   },
   textarea: {
-    width: '100%',
-    padding: '5px 8px',
-    fontSize: '13px',
-    background: 'var(--vscode-input-background, #3c3c3c)',
-    color: 'var(--vscode-input-foreground, #ccc)',
-    border: '1px solid var(--vscode-input-border, transparent)',
+    width: "100%",
+    padding: "5px 8px",
+    fontSize: "13px",
+    background: "var(--vscode-input-background, #3c3c3c)",
+    color: "var(--vscode-input-foreground, #ccc)",
+    border: "1px solid var(--vscode-input-border, transparent)",
     borderRadius: 3,
-    outline: 'none',
+    outline: "none",
     minHeight: 50,
-    resize: 'vertical' as const,
-    fontFamily: 'inherit',
-    boxSizing: 'border-box' as const,
+    resize: "vertical" as const,
+    fontFamily: "inherit",
+    boxSizing: "border-box" as const,
   },
   select: {
-    padding: '5px 8px',
-    fontSize: '13px',
-    background: 'var(--vscode-input-background, #3c3c3c)',
-    color: 'var(--vscode-input-foreground, #ccc)',
-    border: '1px solid var(--vscode-input-border, transparent)',
+    padding: "5px 8px",
+    fontSize: "13px",
+    background: "var(--vscode-input-background, #3c3c3c)",
+    color: "var(--vscode-input-foreground, #ccc)",
+    border: "1px solid var(--vscode-input-border, transparent)",
     borderRadius: 3,
-    outline: 'none',
+    outline: "none",
   },
   row: {
-    display: 'flex',
+    display: "flex",
     gap: 10,
   },
   col: {
     flex: 1,
   },
   addBtn: {
-    background: 'transparent',
-    color: 'var(--vscode-textLink-foreground, #3794ff)',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '11px',
+    background: "transparent",
+    color: "var(--vscode-textLink-foreground, #3794ff)",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "11px",
     fontWeight: 600,
     padding: 0,
   },
   removeBtn: {
-    background: 'transparent',
-    color: 'var(--vscode-errorForeground, #f48771)',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '12px',
-    padding: '2px 6px',
+    background: "transparent",
+    color: "var(--vscode-errorForeground, #f48771)",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "12px",
+    padding: "2px 6px",
     borderRadius: 3,
   },
   card: {
-    background: 'var(--vscode-editor-background, #1e1e1e)',
-    border: '1px solid var(--vscode-widget-border, #444)',
+    background: "var(--vscode-editor-background, #1e1e1e)",
+    border: "1px solid var(--vscode-widget-border, #444)",
     borderRadius: 4,
     padding: 12,
     marginBottom: 8,
   },
   cardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   tag: {
-    display: 'inline-block',
-    background: 'var(--vscode-badge-background, #4d4d4d)',
-    color: 'var(--vscode-badge-foreground, #ccc)',
-    padding: '2px 8px',
+    display: "inline-block",
+    background: "var(--vscode-badge-background, #4d4d4d)",
+    color: "var(--vscode-badge-foreground, #ccc)",
+    padding: "2px 8px",
     borderRadius: 10,
-    fontSize: '11px',
+    fontSize: "11px",
     marginRight: 4,
     marginBottom: 4,
   },
   checkbox: {
     marginRight: 6,
-    accentColor: 'var(--vscode-checkbox-background, #007fd4)',
+    accentColor: "var(--vscode-checkbox-background, #007fd4)",
   },
   collapsible: {
-    cursor: 'pointer',
-    userSelect: 'none' as const,
+    cursor: "pointer",
+    userSelect: "none" as const,
   },
 };
 
@@ -177,7 +189,7 @@ export function EndpointEditor({
   components = {},
   servers = [],
 }: EndpointEditorProps): React.ReactElement {
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState("general");
   const [editingPath, setEditingPath] = useState(false);
   const [pathDraft, setPathDraft] = useState(path);
 
@@ -192,8 +204,8 @@ export function EndpointEditor({
 
   const addParameter = useCallback(() => {
     const params = [...(operation.parameters ?? [])];
-    params.push({ name: '', in: 'query', description: '' });
-    updateField('parameters', params);
+    params.push({ name: "", in: "query", description: "" });
+    updateField("parameters", params);
   }, [operation.parameters, updateField]);
 
   const updateParameter = useCallback(
@@ -209,7 +221,7 @@ export function EndpointEditor({
     (index: number) => {
       const params = [...(operation.parameters ?? [])];
       params.splice(index, 1);
-      updateField('parameters', params);
+      updateField("parameters", params);
     },
     [operation.parameters, updateField]
   );
@@ -221,10 +233,12 @@ export function EndpointEditor({
       ...operation,
       requestBody: {
         required: true,
-        content: { 'application/json': { schema: { type: 'object', properties: {} } } },
+        content: {
+          "application/json": { schema: { type: "object", properties: {} } },
+        },
       },
     });
-    setActiveTab('requestBody');
+    setActiveTab("requestBody");
   }, [operation, onChange]);
 
   const removeRequestBody = useCallback(() => {
@@ -235,16 +249,19 @@ export function EndpointEditor({
 
   // ── Responses ───────────────────────────────────────────────────────────
 
-  const addResponse = useCallback((code: string) => {
-    const responses = { ...(operation.responses ?? {}) };
-    if (code in responses) return;
-    // Find the description from the status codes constant
-    const desc = HTTP_STATUS_CODES
-      .flatMap(g => g.codes)
-      .find(c => c.code === code)?.desc ?? '';
-    responses[code] = { description: desc };
-    updateField('responses', responses);
-  }, [operation.responses, updateField]);
+  const addResponse = useCallback(
+    (code: string) => {
+      const responses = { ...(operation.responses ?? {}) };
+      if (code in responses) return;
+      // Find the description from the status codes constant
+      const desc =
+        HTTP_STATUS_CODES.flatMap((g) => g.codes).find((c) => c.code === code)
+          ?.desc ?? "";
+      responses[code] = { description: desc };
+      updateField("responses", responses);
+    },
+    [operation.responses, updateField]
+  );
 
   const updateResponse = useCallback(
     (code: string, response: OpenApiResponse) => {
@@ -259,14 +276,16 @@ export function EndpointEditor({
     (code: string) => {
       const responses = { ...(operation.responses ?? {}) };
       delete responses[code];
-      updateField('responses', responses);
+      updateField("responses", responses);
     },
     [operation.responses, updateField]
   );
 
   // ── Security ─────────────────────────────────────────────────────────────
 
-  const activeSchemes = (operation.security ?? []).map((s) => Object.keys(s)[0]).filter(Boolean);
+  const activeSchemes = (operation.security ?? [])
+    .map((s) => Object.keys(s)[0])
+    .filter(Boolean);
 
   const toggleScheme = useCallback(
     (scheme: string, enabled: boolean) => {
@@ -277,7 +296,10 @@ export function EndpointEditor({
       } else {
         updated = current.filter((s) => Object.keys(s)[0] !== scheme);
       }
-      onChange({ ...operation, security: updated.length > 0 ? updated : undefined });
+      onChange({
+        ...operation,
+        security: updated.length > 0 ? updated : undefined,
+      });
     },
     [operation, onChange]
   );
@@ -287,10 +309,10 @@ export function EndpointEditor({
   const handleTagsChange = useCallback(
     (tagsStr: string) => {
       const tags = tagsStr
-        .split(',')
+        .split(",")
         .map((t) => t.trim())
         .filter(Boolean);
-      updateField('tags', tags.length > 0 ? tags : undefined);
+      updateField("tags", tags.length > 0 ? tags : undefined);
     },
     [updateField]
   );
@@ -298,15 +320,28 @@ export function EndpointEditor({
   // ── Render ──────────────────────────────────────────────────────────────
 
   const showRequestBodyTab =
-    operation.requestBody !== undefined || ['post', 'put', 'patch'].includes(method);
+    operation.requestBody !== undefined ||
+    ["post", "put", "patch"].includes(method);
 
   const tabs = [
-    { id: 'general', label: 'General' },
-    { id: 'parameters', label: 'Parameters', count: operation.parameters?.length ?? 0 },
-    ...(showRequestBodyTab ? [{ id: 'requestBody', label: 'Request Body' }] : []),
-    { id: 'responses', label: 'Responses', count: Object.keys(operation.responses ?? {}).length },
-    { id: 'examples', label: 'Examples' },
-    ...(availableSchemes.length > 0 ? [{ id: 'security', label: 'Security' }] : []),
+    { id: "general", label: "General" },
+    {
+      id: "parameters",
+      label: "Parameters",
+      count: operation.parameters?.length ?? 0,
+    },
+    ...(showRequestBodyTab
+      ? [{ id: "requestBody", label: "Request Body" }]
+      : []),
+    {
+      id: "responses",
+      label: "Responses",
+      count: Object.keys(operation.responses ?? {}).length,
+    },
+    { id: "examples", label: "Examples" },
+    ...(availableSchemes.length > 0
+      ? [{ id: "security", label: "Security" }]
+      : []),
   ];
 
   return (
@@ -316,22 +351,28 @@ export function EndpointEditor({
         <select
           style={{
             ...styles.methodBadge,
-            background: METHOD_COLORS[method] ?? '#666',
-            border: 'none',
-            cursor: 'pointer',
-            appearance: 'none',
-            WebkitAppearance: 'none',
+            background: METHOD_COLORS[method] ?? "#666",
+            border: "none",
+            cursor: "pointer",
+            appearance: "none",
+            WebkitAppearance: "none",
             paddingRight: 18,
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='white'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 6px center',
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 6px center",
+            flex: "none",
           }}
           value={method}
           onChange={(e) => onMethodChange?.(e.target.value as HttpMethod)}
         >
           {HTTP_METHODS.map((m) => (
-            <option key={m} value={m} disabled={m !== method && usedMethods.includes(m)}>
-              {m.toUpperCase()}{m !== method && usedMethods.includes(m) ? ' (in use)' : ''}
+            <option
+              key={m}
+              value={m}
+              disabled={m !== method && usedMethods.includes(m)}
+            >
+              {m.toUpperCase()}
+              {m !== method && usedMethods.includes(m) ? " (in use)" : ""}
             </option>
           ))}
         </select>
@@ -340,11 +381,11 @@ export function EndpointEditor({
             autoFocus
             style={{
               ...styles.pathText,
-              background: 'var(--vscode-input-background, #3c3c3c)',
-              border: '1px solid var(--vscode-focusBorder, #007fd4)',
+              background: "var(--vscode-input-background, #3c3c3c)",
+              border: "1px solid var(--vscode-focusBorder, #007fd4)",
               borderRadius: 3,
-              padding: '2px 6px',
-              outline: 'none',
+              padding: "2px 6px",
+              outline: "none",
               flex: 1,
             }}
             value={pathDraft}
@@ -356,12 +397,12 @@ export function EndpointEditor({
               }
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === "Enter") {
                 setEditingPath(false);
                 if (pathDraft && pathDraft !== path) {
                   onPathChange?.(pathDraft);
                 }
-              } else if (e.key === 'Escape') {
+              } else if (e.key === "Escape") {
                 setEditingPath(false);
                 setPathDraft(path);
               }
@@ -369,8 +410,11 @@ export function EndpointEditor({
           />
         ) : (
           <span
-            style={{ ...styles.pathText, cursor: 'pointer' }}
-            onClick={() => { setPathDraft(path); setEditingPath(true); }}
+            style={{ ...styles.pathText, cursor: "pointer" }}
+            onClick={() => {
+              setPathDraft(path);
+              setEditingPath(true);
+            }}
             title="Click to edit path"
           >
             {path}
@@ -379,43 +423,51 @@ export function EndpointEditor({
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--vscode-widget-border, #444)', marginBottom: 16 }}>
-        {tabs.map(tab => {
+      <div
+        style={{
+          display: "flex",
+          borderBottom: "1px solid var(--vscode-widget-border, #444)",
+          marginBottom: 16,
+        }}
+      >
+        {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '6px 14px',
-                fontSize: '12px',
-                background: 'transparent',
-                border: 'none',
+                padding: "6px 14px",
+                fontSize: "12px",
+                background: "transparent",
+                border: "none",
                 borderBottom: isActive
-                  ? '2px solid var(--vscode-textLink-foreground, #3794ff)'
-                  : '2px solid transparent',
+                  ? "2px solid var(--vscode-textLink-foreground, #3794ff)"
+                  : "2px solid transparent",
                 color: isActive
-                  ? 'var(--vscode-textLink-foreground, #3794ff)'
-                  : 'var(--vscode-foreground, #ccc)',
-                cursor: 'pointer',
+                  ? "var(--vscode-textLink-foreground, #3794ff)"
+                  : "var(--vscode-foreground, #ccc)",
+                cursor: "pointer",
                 fontWeight: isActive ? 600 : 400,
-                display: 'flex',
-                alignItems: 'center',
+                display: "flex",
+                alignItems: "center",
                 gap: 5,
                 marginBottom: -1,
-                whiteSpace: 'nowrap' as const,
+                whiteSpace: "nowrap" as const,
               }}
             >
               {tab.label}
-              {'count' in tab && (tab.count ?? 0) > 0 && (
-                <span style={{
-                  background: 'var(--vscode-badge-background, #4d4d4d)',
-                  color: 'var(--vscode-badge-foreground, #ccc)',
-                  borderRadius: 8,
-                  padding: '1px 5px',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                }}>
+              {"count" in tab && (tab.count ?? 0) > 0 && (
+                <span
+                  style={{
+                    background: "var(--vscode-badge-background, #4d4d4d)",
+                    color: "var(--vscode-badge-foreground, #ccc)",
+                    borderRadius: 8,
+                    padding: "1px 5px",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                  }}
+                >
                   {tab.count}
                 </span>
               )}
@@ -425,15 +477,15 @@ export function EndpointEditor({
       </div>
 
       {/* ── General ── */}
-      {activeTab === 'general' && (
+      {activeTab === "general" && (
         <div>
           <div style={styles.fieldGroup}>
             <label style={styles.label}>Summary</label>
             <input
               style={styles.input}
               type="text"
-              value={operation.summary ?? ''}
-              onChange={(e) => updateField('summary', e.target.value)}
+              value={operation.summary ?? ""}
+              onChange={(e) => updateField("summary", e.target.value)}
               placeholder="Brief summary of the endpoint"
             />
           </div>
@@ -441,8 +493,8 @@ export function EndpointEditor({
             <label style={styles.label}>Description</label>
             <textarea
               style={styles.textarea}
-              value={operation.description ?? ''}
-              onChange={(e) => updateField('description', e.target.value)}
+              value={operation.description ?? ""}
+              onChange={(e) => updateField("description", e.target.value)}
               placeholder="Detailed description..."
             />
           </div>
@@ -453,8 +505,8 @@ export function EndpointEditor({
                 <input
                   style={styles.input}
                   type="text"
-                  value={operation.operationId ?? ''}
-                  onChange={(e) => updateField('operationId', e.target.value)}
+                  value={operation.operationId ?? ""}
+                  onChange={(e) => updateField("operationId", e.target.value)}
                   placeholder="getUsers"
                 />
               </div>
@@ -465,7 +517,7 @@ export function EndpointEditor({
                 <input
                   style={styles.input}
                   type="text"
-                  value={(operation.tags ?? []).join(', ')}
+                  value={(operation.tags ?? []).join(", ")}
                   onChange={(e) => handleTagsChange(e.target.value)}
                   placeholder="users, admin"
                 />
@@ -475,7 +527,9 @@ export function EndpointEditor({
           {operation.tags && operation.tags.length > 0 && (
             <div style={{ marginBottom: 8 }}>
               {operation.tags.map((tag) => (
-                <span key={tag} style={styles.tag}>{tag}</span>
+                <span key={tag} style={styles.tag}>
+                  {tag}
+                </span>
               ))}
             </div>
           )}
@@ -483,13 +537,28 @@ export function EndpointEditor({
       )}
 
       {/* ── Parameters ── */}
-      {activeTab === 'parameters' && (
+      {activeTab === "parameters" && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-            <button style={styles.addBtn} onClick={addParameter}>+ Add Parameter</button>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              marginBottom: 8,
+            }}
+          >
+            <button style={styles.addBtn} onClick={addParameter}>
+              + Add Parameter
+            </button>
           </div>
           {(operation.parameters ?? []).length === 0 && (
-            <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground, #9d9d9d)', textAlign: 'center', padding: '24px 0' }}>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--vscode-descriptionForeground, #9d9d9d)",
+                textAlign: "center",
+                padding: "24px 0",
+              }}
+            >
               No parameters. Click "+ Add Parameter" to create one.
             </div>
           )}
@@ -506,43 +575,84 @@ export function EndpointEditor({
       )}
 
       {/* ── Request Body ── */}
-      {activeTab === 'requestBody' && showRequestBodyTab && (
+      {activeTab === "requestBody" && showRequestBodyTab && (
         <div>
           {operation.requestBody ? (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <label style={{ ...styles.label, display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginBottom: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}
+              >
+                <label
+                  style={{
+                    ...styles.label,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    marginBottom: 0,
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={operation.requestBody.required ?? false}
-                    onChange={e => updateField('requestBody', { ...operation.requestBody, required: e.target.checked })}
+                    onChange={(e) =>
+                      updateField("requestBody", {
+                        ...operation.requestBody,
+                        required: e.target.checked,
+                      })
+                    }
                     style={styles.checkbox}
                   />
                   Required
                 </label>
-                <button style={styles.removeBtn} onClick={removeRequestBody}>Remove body</button>
+                <button style={styles.removeBtn} onClick={removeRequestBody}>
+                  Remove body
+                </button>
               </div>
               <div style={styles.fieldGroup}>
                 <label style={styles.label}>Description</label>
                 <input
                   style={styles.input}
-                  value={operation.requestBody.description ?? ''}
-                  onChange={e => updateField('requestBody', { ...operation.requestBody!, description: e.target.value || undefined })}
+                  value={operation.requestBody.description ?? ""}
+                  onChange={(e) =>
+                    updateField("requestBody", {
+                      ...operation.requestBody!,
+                      description: e.target.value || undefined,
+                    })
+                  }
                   placeholder="Describe the request body…"
                 />
               </div>
               <ContentBodyEditor
                 content={operation.requestBody.content ?? {}}
-                onChange={content => updateField('requestBody', { ...operation.requestBody!, content })}
+                onChange={(content) =>
+                  updateField("requestBody", {
+                    ...operation.requestBody!,
+                    content,
+                  })
+                }
                 availableRefs={availableRefs}
               />
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground, #9d9d9d)', marginBottom: 12 }}>
+            <div style={{ textAlign: "center", padding: "24px 0" }}>
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--vscode-descriptionForeground, #9d9d9d)",
+                  marginBottom: 12,
+                }}
+              >
                 No request body defined.
               </div>
-              <button style={{ ...styles.addBtn, fontSize: '13px' }} onClick={addRequestBody}>
+              <button
+                style={{ ...styles.addBtn, fontSize: "13px" }}
+                onClick={addRequestBody}
+              >
                 + Add Request Body
               </button>
             </div>
@@ -551,22 +661,38 @@ export function EndpointEditor({
       )}
 
       {/* ── Responses ── */}
-      {activeTab === 'responses' && (
+      {activeTab === "responses" && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              marginBottom: 8,
+            }}
+          >
             <select
-              style={{ ...styles.select, fontSize: '11px', color: 'var(--vscode-textLink-foreground, #3794ff)' }}
+              style={{
+                ...styles.select,
+                fontSize: "11px",
+                color: "var(--vscode-textLink-foreground, #3794ff)",
+              }}
               value=""
-              onChange={(e) => { if (e.target.value) addResponse(e.target.value); }}
+              onChange={(e) => {
+                if (e.target.value) addResponse(e.target.value);
+              }}
             >
               <option value="">+ Add Response</option>
               {HTTP_STATUS_CODES.map((group) => {
-                const available = group.codes.filter(c => !(c.code in (operation.responses ?? {})));
+                const available = group.codes.filter(
+                  (c) => !(c.code in (operation.responses ?? {}))
+                );
                 if (available.length === 0) return null;
                 return (
                   <optgroup key={group.group} label={group.group}>
-                    {available.map(c => (
-                      <option key={c.code} value={c.code}>{c.code} — {c.desc}</option>
+                    {available.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.desc}
+                      </option>
                     ))}
                   </optgroup>
                 );
@@ -574,7 +700,14 @@ export function EndpointEditor({
             </select>
           </div>
           {Object.keys(operation.responses ?? {}).length === 0 && (
-            <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground, #9d9d9d)', textAlign: 'center', padding: '24px 0' }}>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--vscode-descriptionForeground, #9d9d9d)",
+                textAlign: "center",
+                padding: "24px 0",
+              }}
+            >
               No responses defined. Select a status code above to create one.
             </div>
           )}
@@ -592,7 +725,7 @@ export function EndpointEditor({
       )}
 
       {/* ── Examples ── */}
-      {activeTab === 'examples' && (
+      {activeTab === "examples" && (
         <ExamplesEditor
           operation={operation}
           onChange={onChange}
@@ -604,12 +737,18 @@ export function EndpointEditor({
       )}
 
       {/* ── Security ── */}
-      {activeTab === 'security' && availableSchemes.length > 0 && (
+      {activeTab === "security" && availableSchemes.length > 0 && (
         <div style={styles.card}>
           {availableSchemes.map((scheme) => (
             <label
               key={scheme}
-              style={{ ...styles.label, display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginBottom: 8 }}
+              style={{
+                ...styles.label,
+                display: "inline-flex",
+                alignItems: "center",
+                cursor: "pointer",
+                marginBottom: 8,
+              }}
             >
               <input
                 type="checkbox"
@@ -642,7 +781,7 @@ function ParameterCard({
   return (
     <div style={styles.card}>
       <div style={styles.cardHeader}>
-        <span style={{ fontSize: '12px', fontWeight: 600 }}>
+        <span style={{ fontSize: "12px", fontWeight: 600 }}>
           Parameter #{index + 1}
         </span>
         <button style={styles.removeBtn} onClick={() => onRemove(index)}>
@@ -658,7 +797,7 @@ function ParameterCard({
               style={styles.input}
               type="text"
               value={param.name}
-              onChange={(e) => onUpdate(index, 'name', e.target.value)}
+              onChange={(e) => onUpdate(index, "name", e.target.value)}
               placeholder="paramName"
             />
           </div>
@@ -667,9 +806,9 @@ function ParameterCard({
           <div style={styles.fieldGroup}>
             <label style={styles.label}>Location</label>
             <select
-              style={{ ...styles.select, width: '100%' }}
+              style={{ ...styles.select, width: "100%" }}
               value={param.in}
-              onChange={(e) => onUpdate(index, 'in', e.target.value)}
+              onChange={(e) => onUpdate(index, "in", e.target.value)}
             >
               <option value="query">query</option>
               <option value="path">path</option>
@@ -682,9 +821,14 @@ function ParameterCard({
           <div style={styles.fieldGroup}>
             <label style={styles.label}>Type</label>
             <select
-              style={{ ...styles.select, width: '100%' }}
-              value={param.schema?.type ?? 'string'}
-              onChange={(e) => onUpdate(index, 'schema', { ...param.schema, type: e.target.value })}
+              style={{ ...styles.select, width: "100%" }}
+              value={param.schema?.type ?? "string"}
+              onChange={(e) =>
+                onUpdate(index, "schema", {
+                  ...param.schema,
+                  type: e.target.value,
+                })
+              }
             >
               <option value="string">string</option>
               <option value="integer">integer</option>
@@ -701,18 +845,25 @@ function ParameterCard({
         <input
           style={styles.input}
           type="text"
-          value={param.description ?? ''}
-          onChange={(e) => onUpdate(index, 'description', e.target.value)}
+          value={param.description ?? ""}
+          onChange={(e) => onUpdate(index, "description", e.target.value)}
           placeholder="Parameter description"
         />
       </div>
 
       <div>
-        <label style={{ ...styles.label, display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+        <label
+          style={{
+            ...styles.label,
+            display: "inline-flex",
+            alignItems: "center",
+            cursor: "pointer",
+          }}
+        >
           <input
             type="checkbox"
             checked={param.required ?? false}
-            onChange={(e) => onUpdate(index, 'required', e.target.checked)}
+            onChange={(e) => onUpdate(index, "required", e.target.checked)}
             style={styles.checkbox}
           />
           Required
@@ -737,19 +888,24 @@ function ResponseCard({
   onRemove: (code: string) => void;
   availableRefs: string[];
 }): React.ReactElement {
-  const [bodyExpanded, setBodyExpanded] = useState(!!response.content && Object.keys(response.content).length > 0);
+  const [bodyExpanded, setBodyExpanded] = useState(
+    !!response.content && Object.keys(response.content).length > 0
+  );
 
   const codeNum = parseInt(code, 10);
-  let codeColor = '#49cc90';
-  if (codeNum >= 300 && codeNum < 400) codeColor = '#fca130';
-  if (codeNum >= 400) codeColor = '#f93e3e';
+  let codeColor = "#49cc90";
+  if (codeNum >= 300 && codeNum < 400) codeColor = "#fca130";
+  if (codeNum >= 400) codeColor = "#f93e3e";
 
-  const hasBody = !!response.content && Object.keys(response.content).length > 0;
+  const hasBody =
+    !!response.content && Object.keys(response.content).length > 0;
 
   const addBody = () => {
     onChange(code, {
       ...response,
-      content: { 'application/json': { schema: { type: 'object', properties: {} } } },
+      content: {
+        "application/json": { schema: { type: "object", properties: {} } },
+      },
     });
     setBodyExpanded(true);
   };
@@ -757,8 +913,12 @@ function ResponseCard({
   return (
     <div style={styles.card}>
       <div style={styles.cardHeader}>
-        <span style={{ fontSize: '12px', fontWeight: 700, color: codeColor }}>{code}</span>
-        <button style={styles.removeBtn} onClick={() => onRemove(code)}>Remove</button>
+        <span style={{ fontSize: "12px", fontWeight: 700, color: codeColor }}>
+          {code}
+        </span>
+        <button style={styles.removeBtn} onClick={() => onRemove(code)}>
+          Remove
+        </button>
       </div>
 
       <div style={styles.fieldGroup}>
@@ -766,28 +926,45 @@ function ResponseCard({
         <input
           style={styles.input}
           type="text"
-          value={response.description ?? ''}
-          onChange={e => onChange(code, { ...response, description: e.target.value })}
+          value={response.description ?? ""}
+          onChange={(e) =>
+            onChange(code, { ...response, description: e.target.value })
+          }
           placeholder="Response description"
         />
       </div>
 
       {/* Body section */}
       <div>
-        <div style={{ ...styles.sectionTitle, ...styles.collapsible, marginBottom: 8 }}>
-          <span onClick={() => setBodyExpanded(e => !e)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {bodyExpanded ? '▾' : '▸'}
+        <div
+          style={{
+            ...styles.sectionTitle,
+            ...styles.collapsible,
+            marginBottom: 8,
+          }}
+        >
+          <span
+            onClick={() => setBodyExpanded((e) => !e)}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            {bodyExpanded ? "▾" : "▸"}
             <span>Body</span>
-            {hasBody && <span style={{ fontWeight: 400 }}>({Object.keys(response.content!).join(', ')})</span>}
+            {hasBody && (
+              <span style={{ fontWeight: 400 }}>
+                ({Object.keys(response.content!).join(", ")})
+              </span>
+            )}
           </span>
           {!hasBody && (
-            <button style={styles.addBtn} onClick={addBody}>+ Add</button>
+            <button style={styles.addBtn} onClick={addBody}>
+              + Add
+            </button>
           )}
         </div>
         {bodyExpanded && hasBody && (
           <ContentBodyEditor
             content={response.content!}
-            onChange={content => onChange(code, { ...response, content })}
+            onChange={(content) => onChange(code, { ...response, content })}
             availableRefs={availableRefs}
           />
         )}

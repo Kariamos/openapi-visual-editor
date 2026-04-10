@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { OpenApiSchema } from '../App';
+import { JsonSchemaEditor } from './JsonSchemaEditor';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -109,13 +110,15 @@ const ms = {
   },
   expandBtn: {
     background: 'transparent',
-    color: 'var(--vscode-descriptionForeground, #9d9d9d)',
+    color: 'var(--vscode-foreground, #ccc)',
     border: 'none',
     cursor: 'pointer',
-    fontSize: '10px',
+    fontSize: '13px',
     padding: '2px',
-    width: 16,
+    width: 20,
     flexShrink: 0 as const,
+    lineHeight: 1,
+    textAlign: 'center' as const,
   },
   propRow: {
     display: 'flex',
@@ -222,6 +225,120 @@ function TypeSelect({
   );
 }
 
+// ─── EnumEditor ──────────────────────────────────────────────────────────────
+
+function EnumEditor({
+  values,
+  onChange,
+  type,
+}: {
+  values?: unknown[];
+  onChange: (values: unknown[]) => void;
+  type: string;
+}): React.ReactElement {
+  const [inputValue, setInputValue] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+
+  const addValue = () => {
+    const raw = inputValue.trim();
+    if (!raw) return;
+
+    let parsed: unknown = raw;
+    if (type === 'integer') {
+      const n = parseInt(raw, 10);
+      if (!isNaN(n)) parsed = n;
+    } else if (type === 'number') {
+      const n = parseFloat(raw);
+      if (!isNaN(n)) parsed = n;
+    } else if (type === 'boolean') {
+      parsed = raw === 'true';
+    }
+
+    const current = values ?? [];
+    if (!current.some(v => v === parsed)) {
+      onChange([...current, parsed]);
+    }
+    setInputValue('');
+  };
+
+  const removeValue = (idx: number) => {
+    const current = values ?? [];
+    onChange(current.filter((_, i) => i !== idx));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addValue();
+    } else if (e.key === 'Escape') {
+      setIsAdding(false);
+      setInputValue('');
+    }
+  };
+
+  const hasValues = values && values.length > 0;
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <label style={{ ...ms.label, marginBottom: 0 }}>Enum</label>
+        {hasValues && values.map((v, i) => (
+          <span key={i} style={enumChipStyle}>
+            {String(v)}
+            <button
+              style={enumChipRemoveStyle}
+              onClick={() => removeValue(i)}
+              title={`Remove "${String(v)}"`}
+            >×</button>
+          </span>
+        ))}
+        {isAdding ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            <input
+              style={{ ...ms.input, width: 100, display: 'inline-block' }}
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={() => { if (!inputValue.trim()) setIsAdding(false); }}
+              placeholder={type === 'boolean' ? 'true / false' : `Add ${type}…`}
+              autoFocus
+            />
+            <button style={ms.addBtn} onClick={addValue}>Add</button>
+          </span>
+        ) : (
+          <button
+            style={ms.addBtn}
+            onClick={() => setIsAdding(true)}
+          >+ Add value</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const enumChipStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 3,
+  padding: '2px 7px',
+  fontSize: '11px',
+  borderRadius: 3,
+  background: 'var(--vscode-badge-background, #4d4d4d)',
+  color: 'var(--vscode-badge-foreground, #fff)',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+};
+
+const enumChipRemoveStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'inherit',
+  cursor: 'pointer',
+  fontSize: '12px',
+  lineHeight: 1,
+  padding: '0 1px',
+  opacity: 0.7,
+};
+
 // ─── SchemaEditor ─────────────────────────────────────────────────────────────
 
 export function SchemaEditor({
@@ -319,6 +436,15 @@ export function SchemaEditor({
             </div>
           )}
         </div>
+      )}
+
+      {/* Enum values (for primitives) */}
+      {!isComplex(displayType) && displayType !== '$ref' && displayType !== 'not' && (
+        <EnumEditor
+          values={schema.enum}
+          onChange={values => onChange({ ...schema, enum: values.length > 0 ? values : undefined })}
+          type={displayType}
+        />
       )}
 
       {/* Object properties */}
@@ -570,6 +696,7 @@ function PropertyRow({
   const [localName, setLocalName] = useState(name);
   const displayType = getDisplayType(schema);
   const complex = isComplex(displayType);
+  const isPrimitive = !complex && displayType !== '$ref';
   const childTypes = depth >= 1 ? LEAF_TYPES : ALL_TYPES;
 
   useEffect(() => { setLocalName(name); }, [name]);
@@ -589,13 +716,13 @@ function PropertyRow({
   return (
     <div>
       <div style={ms.propRow}>
-        {/* Expand toggle */}
+        {/* Expand toggle — visible for all types (complex for nesting, primitive for enum/example) */}
         <button
-          style={{ ...ms.expandBtn, visibility: complex ? 'visible' : 'hidden' }}
+          style={ms.expandBtn}
           onClick={() => setExpanded(e => !e)}
-          title="Expand"
+          title={expanded ? 'Collapse' : 'Expand'}
         >
-          {expanded ? '▾' : '▸'}
+          {expanded ? '▼' : '▶'}
         </button>
 
         {/* Name */}
@@ -685,7 +812,7 @@ function PropertyRow({
         <button style={{ ...ms.removeBtn, width: 22 }} onClick={onRemove} title="Remove property">×</button>
       </div>
 
-      {/* Expanded nested schema */}
+      {/* Expanded: nested schema for complex types */}
       {expanded && complex && (
         <div style={ms.nested}>
           {displayType === 'object' && (
@@ -729,9 +856,189 @@ function PropertyRow({
           )}
         </div>
       )}
+
+      {/* Expanded: enum + example + default for primitive types */}
+      {expanded && isPrimitive && (
+        <div style={ms.nested}>
+          <EnumEditor
+            values={schema.enum}
+            onChange={values => onSchemaChange({ ...schema, enum: values.length > 0 ? values : undefined })}
+            type={displayType}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <div style={{ flex: 1 }}>
+              <label style={ms.label}>Example</label>
+              <input
+                style={ms.input}
+                value={schema.example != null ? String(schema.example) : ''}
+                onChange={e => onSchemaChange({ ...schema, example: e.target.value || undefined })}
+                placeholder="e.g. foo-bar"
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={ms.label}>Default</label>
+              <input
+                style={ms.input}
+                value={schema.default != null ? String(schema.default) : ''}
+                onChange={e => {
+                  const raw = e.target.value;
+                  let parsed: unknown = raw || undefined;
+                  if (raw && displayType === 'integer') {
+                    const n = parseInt(raw, 10);
+                    if (!isNaN(n)) parsed = n;
+                  } else if (raw && displayType === 'number') {
+                    const n = parseFloat(raw);
+                    if (!isNaN(n)) parsed = n;
+                  } else if (displayType === 'boolean') {
+                    parsed = raw === 'true' ? true : raw === 'false' ? false : undefined;
+                  }
+                  onSchemaChange({ ...schema, default: parsed });
+                }}
+                placeholder={displayType === 'boolean' ? 'true / false' : `Default ${displayType} value`}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// ─── JSON Example → Schema Inference ─────────────────────────────────────────
+
+function inferSchemaFromValue(value: unknown): OpenApiSchema {
+  if (value === null || value === undefined) {
+    return { type: 'string' };
+  }
+  if (typeof value === 'string') {
+    return { type: 'string', example: value };
+  }
+  if (typeof value === 'boolean') {
+    return { type: 'boolean', example: value };
+  }
+  if (typeof value === 'number') {
+    return Number.isInteger(value)
+      ? { type: 'integer', example: value }
+      : { type: 'number', example: value };
+  }
+  if (Array.isArray(value)) {
+    const itemSchema = value.length > 0
+      ? inferSchemaFromValue(value[0])
+      : { type: 'string' as const };
+    return { type: 'array', items: itemSchema };
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    const properties: Record<string, OpenApiSchema> = {};
+    for (const key of keys) {
+      properties[key] = inferSchemaFromValue(obj[key]);
+    }
+    return {
+      type: 'object',
+      properties,
+      required: keys.length > 0 ? keys : undefined,
+    };
+  }
+  return { type: 'string' };
+}
+
+function PasteJsonExample({
+  onGenerate,
+}: {
+  onGenerate: (schema: OpenApiSchema) => void;
+}): React.ReactElement {
+  const [showPaste, setShowPaste] = useState(false);
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const generate = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid JSON');
+      return;
+    }
+    setError(null);
+    const schema = inferSchemaFromValue(parsed);
+    onGenerate(schema);
+    setText('');
+    setShowPaste(false);
+  };
+
+  if (!showPaste) {
+    return (
+      <button style={ms.addBtn} onClick={() => setShowPaste(true)}>
+        Paste JSON Example
+      </button>
+    );
+  }
+
+  return (
+    <div style={pasteBoxStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--vscode-foreground, #ccc)' }}>
+          Paste a JSON example to generate the schema
+        </span>
+        <button
+          style={{ ...ms.removeBtn, fontSize: '12px' }}
+          onClick={() => { setShowPaste(false); setText(''); setError(null); }}
+        >×</button>
+      </div>
+      <textarea
+        style={{
+          ...ms.input,
+          height: 120,
+          fontFamily: 'var(--vscode-editor-font-family, monospace)',
+          fontSize: '12px',
+          resize: 'vertical',
+        }}
+        value={text}
+        onChange={e => { setText(e.target.value); setError(null); }}
+        placeholder={'{\n  "name": "John",\n  "age": 30,\n  "items": [{"id": 1}]\n}'}
+      />
+      {error && (
+        <div style={{ fontSize: '11px', color: 'var(--vscode-errorForeground, #f48771)', marginTop: 4 }}>
+          ⚠ {error}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        <button
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            background: 'var(--vscode-button-background, #0e639c)',
+            color: 'var(--vscode-button-foreground, #fff)',
+            border: 'none',
+            borderRadius: 3,
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
+          onClick={generate}
+        >
+          Generate Schema
+        </button>
+        <button
+          style={{ ...ms.addBtn, fontSize: '12px' }}
+          onClick={() => { setShowPaste(false); setText(''); setError(null); }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const pasteBoxStyle: React.CSSProperties = {
+  marginTop: 12,
+  padding: 12,
+  border: '1px solid var(--vscode-panel-border, #3c3c3c)',
+  borderRadius: 4,
+  background: 'var(--vscode-editor-background, #1e1e1e)',
+};
 
 // ─── ContentBodyEditor ────────────────────────────────────────────────────────
 
@@ -746,6 +1053,7 @@ export function ContentBodyEditor({
 }): React.ReactElement {
   const types = Object.keys(content);
   const [activeType, setActiveType] = useState<string>(types[0] ?? '');
+  const [showJson, setShowJson] = useState<boolean>(false);
 
   useEffect(() => {
     if (!types.includes(activeType) && types.length > 0) {
@@ -800,16 +1108,42 @@ export function ContentBodyEditor({
             {unused.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         )}
+        {current && content[current] !== undefined && (
+          <button
+            style={{
+              ...tabStyle(showJson),
+              marginLeft: 'auto',
+              fontFamily: 'var(--vscode-editor-font-family, monospace)',
+            }}
+            onClick={() => setShowJson(v => !v)}
+            title={showJson ? 'Hide JSON editor' : 'Show JSON editor'}
+          >
+            {'{ }'} {showJson ? 'Hide JSON' : 'Show JSON'}
+          </button>
+        )}
       </div>
 
       {/* Schema editor */}
       {current && content[current] !== undefined ? (
-        <SchemaEditor
-          schema={content[current].schema ?? { type: 'object', properties: {} }}
-          onChange={schema => onChange({ ...content, [current]: { schema } })}
-          availableRefs={availableRefs}
-          depth={0}
-        />
+        <>
+          <SchemaEditor
+            schema={content[current].schema ?? { type: 'object', properties: {} }}
+            onChange={schema => onChange({ ...content, [current]: { schema } })}
+            availableRefs={availableRefs}
+            depth={0}
+          />
+          {showJson && (
+            <JsonSchemaEditor
+              schema={content[current].schema ?? { type: 'object', properties: {} }}
+              onChange={schema => onChange({ ...content, [current]: { schema } })}
+            />
+          )}
+          <div style={{ marginTop: 10, borderTop: '1px solid var(--vscode-widget-border, #2d2d2d)', paddingTop: 10 }}>
+            <PasteJsonExample
+              onGenerate={schema => onChange({ ...content, [current]: { schema } })}
+            />
+          </div>
+        </>
       ) : (
         <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground, #777)' }}>
           No content type defined. Add one above.

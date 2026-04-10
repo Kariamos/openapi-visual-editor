@@ -172,7 +172,7 @@ interface DiagnosticsPanelProps {
 export function DiagnosticsPanel({
   diagnostics,
   defaultExpanded = true,
-  maxHeight = 280,
+  maxHeight = 180,
 }: DiagnosticsPanelProps): React.ReactElement {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [severityFilter, setSeverityFilter] = useState<Set<DiagnosticSeverity>>(
@@ -229,7 +229,7 @@ export function DiagnosticsPanel({
               color: "var(--vscode-descriptionForeground, #888)",
             }}
           >
-            {expanded ? "▾" : "▸"}
+            {expanded ? "▼" : "▶"}
           </span>
           <span style={styles.headerTitle}>Diagnostics</span>
 
