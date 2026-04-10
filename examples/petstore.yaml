@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: ""
-  description: ""
-  version: ""
+  title: petstore
+  description: test
+  version: 1.0.0
 servers:
   - url: not-a-valid-url
     description: Production server
@@ -11,11 +11,71 @@ tags:
     description: Everything about your Pets
   - name: owners
     description: Pet owners management
-  - name: pets
-    description: Duplicate tag on purpose
   - name: unused-tag
     description: ""
 paths:
+  /owners:
+    get:
+      summary: List all owners
+      operationId: listOwners
+      tags:
+        - owners
+      responses:
+        "200":
+          description: A list of owners
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Owner"
+    post:
+      summary: Register a new owner
+      operationId: createOwner
+      tags:
+        - owners
+      requestBody:
+        required: true
+        description: Owner to register
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Owner"
+              name: string
+      responses: {}
+      security:
+        - bearerAuth: []
+        - fakeAuth: []
+  /owners/{ownerId}/pets:
+    get:
+      summary: List pets belonging to an owner
+      operationId: listPetsByOwner
+      tags:
+        - owners
+        - pets
+      parameters:
+        - name: ownerId
+          in: path
+          required: true
+          description: The id of the owner
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Pets owned by this owner
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+        "404":
+          description: Owner not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /pets:
     get:
       summary: List all pets
@@ -147,6 +207,52 @@ paths:
                         street: 123 Main St
                         city: Springfield
                         zip: "12345"
+        "204":
+          description: No Content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  firstName:
+                    type: string
+                    example: John
+                  lastName:
+                    type: string
+                    example: Doe
+                  age:
+                    type: integer
+                    example: 30
+                  isEmployee:
+                    type: boolean
+                    example: true
+                  hobbies:
+                    type: array
+                    items:
+                      type: string
+                      example: reading
+                  address:
+                    type: object
+                    properties:
+                      city:
+                        type: string
+                        example: New York
+                      zip:
+                        type: string
+                        example: "10001"
+                    required:
+                      - city
+                      - zip
+                  car:
+                    type: string
+                required:
+                  - firstName
+                  - lastName
+                  - age
+                  - isEmployee
+                  - hobbies
+                  - address
+                  - car
         "404":
           description: Pet not found
           content:
@@ -212,67 +318,6 @@ paths:
                 $ref: "#/components/schemas/Error"
       security:
         - bearerAuth: []
-  /owners:
-    get:
-      summary: List all owners
-      operationId: listOwners
-      tags:
-        - owners
-      responses:
-        "200":
-          description: A list of owners
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Owner"
-    post:
-      summary: Register a new owner
-      operationId: createOwner
-      tags:
-        - owners
-      requestBody:
-        required: true
-        description: Owner to register
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Owner"
-      responses: {}
-      security:
-        - bearerAuth: []
-        - fakeAuth: []
-  /owners/{ownerId}/pets:
-    get:
-      summary: List pets belonging to an owner
-      operationId: listPetsByOwner
-      tags:
-        - owners
-        - pets
-      parameters:
-        - name: ownerId
-          in: path
-          required: true
-          description: The id of the owner
-          schema:
-            type: integer
-            format: int64
-      responses:
-        "200":
-          description: Pets owned by this owner
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Pet"
-        "404":
-          description: Owner not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:

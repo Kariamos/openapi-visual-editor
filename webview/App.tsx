@@ -34,6 +34,7 @@ export interface OpenApiSchema {
   enum?: unknown[];
   format?: string;
   example?: unknown;
+  default?: unknown;
   $ref?: string;
   allOf?: OpenApiSchema[];
   oneOf?: OpenApiSchema[];
