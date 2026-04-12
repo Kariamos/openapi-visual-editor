@@ -339,6 +339,139 @@ const enumChipRemoveStyle: React.CSSProperties = {
   opacity: 0.7,
 };
 
+// ─── ValidationConstraints ───────────────────────────────────────────────────
+
+function ValidationConstraints({
+  schema,
+  onChange,
+  type,
+}: {
+  schema: OpenApiSchema;
+  onChange: (s: OpenApiSchema) => void;
+  type: string;
+}): React.ReactElement | null {
+  const isString = type === 'string';
+  const isNumeric = type === 'integer' || type === 'number';
+  const isArray = type === 'array';
+
+  if (!isString && !isNumeric && !isArray) return null;
+
+  const setNum = (field: string, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      const next = { ...schema };
+      delete next[field];
+      onChange(next);
+      return;
+    }
+    const n = field === 'uniqueItems' ? undefined : (Number.isInteger(parseFloat(trimmed)) ? parseInt(trimmed, 10) : parseFloat(trimmed));
+    if (n !== undefined && !isNaN(n)) {
+      onChange({ ...schema, [field]: n });
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {isString && (
+          <>
+            <div style={{ width: 80 }}>
+              <label style={ms.label}>Min length</label>
+              <input
+                type="number"
+                style={ms.input}
+                value={schema.minLength ?? ''}
+                onChange={e => setNum('minLength', e.target.value)}
+                placeholder="—"
+                min={0}
+              />
+            </div>
+            <div style={{ width: 80 }}>
+              <label style={ms.label}>Max length</label>
+              <input
+                type="number"
+                style={ms.input}
+                value={schema.maxLength ?? ''}
+                onChange={e => setNum('maxLength', e.target.value)}
+                placeholder="—"
+                min={0}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <label style={ms.label}>Pattern (regex)</label>
+              <input
+                style={ms.input}
+                value={schema.pattern ?? ''}
+                onChange={e => onChange({ ...schema, pattern: e.target.value || undefined })}
+                placeholder="e.g. ^[a-z]+$"
+              />
+            </div>
+          </>
+        )}
+        {isNumeric && (
+          <>
+            <div style={{ width: 90 }}>
+              <label style={ms.label}>Minimum</label>
+              <input
+                type="number"
+                style={ms.input}
+                value={schema.minimum ?? ''}
+                onChange={e => setNum('minimum', e.target.value)}
+                placeholder="—"
+              />
+            </div>
+            <div style={{ width: 90 }}>
+              <label style={ms.label}>Maximum</label>
+              <input
+                type="number"
+                style={ms.input}
+                value={schema.maximum ?? ''}
+                onChange={e => setNum('maximum', e.target.value)}
+                placeholder="—"
+              />
+            </div>
+          </>
+        )}
+        {isArray && (
+          <>
+            <div style={{ width: 80 }}>
+              <label style={ms.label}>Min items</label>
+              <input
+                type="number"
+                style={ms.input}
+                value={schema.minItems ?? ''}
+                onChange={e => setNum('minItems', e.target.value)}
+                placeholder="—"
+                min={0}
+              />
+            </div>
+            <div style={{ width: 80 }}>
+              <label style={ms.label}>Max items</label>
+              <input
+                type="number"
+                style={ms.input}
+                value={schema.maxItems ?? ''}
+                onChange={e => setNum('maxItems', e.target.value)}
+                placeholder="—"
+                min={0}
+              />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '11px', color: 'var(--vscode-foreground, #ccc)' }}>
+              <input
+                type="checkbox"
+                checked={schema.uniqueItems ?? false}
+                onChange={e => onChange({ ...schema, uniqueItems: e.target.checked || undefined })}
+                style={{ accentColor: 'var(--vscode-checkbox-background, #007fd4)', margin: 0 }}
+              />
+              Unique items
+            </label>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── SchemaEditor ─────────────────────────────────────────────────────────────
 
 export function SchemaEditor({
@@ -353,7 +486,7 @@ export function SchemaEditor({
   depth?: number;
 }): React.ReactElement {
   const displayType = getDisplayType(schema);
-  const allowedTypes = depth >= 2 ? LEAF_TYPES : ALL_TYPES;
+  const allowedTypes = depth >= 3 ? LEAF_TYPES : ALL_TYPES;
 
   const setType = (t: string) => {
     const next = initSchema(t, availableRefs);
@@ -383,7 +516,7 @@ export function SchemaEditor({
                 onChange={e => onChange({ $ref: e.target.value })}
               >
                 {availableRefs.map(r => (
-                  <option key={r} value={r}>{r.replace('#/components/schemas/', '')}</option>
+                  <option key={r} value={r}>{r.replace('#/components/', '')}</option>
                 ))}
               </select>
             ) : (
@@ -447,6 +580,11 @@ export function SchemaEditor({
         />
       )}
 
+      {/* Validation constraints (for primitives at top-level) */}
+      {!isComplex(displayType) && displayType !== '$ref' && displayType !== 'not' && (
+        <ValidationConstraints schema={schema} onChange={onChange} type={displayType} />
+      )}
+
       {/* Object properties */}
       {displayType === 'object' && (
         <ObjectPropertiesEditor
@@ -460,6 +598,7 @@ export function SchemaEditor({
       {/* Array items */}
       {displayType === 'array' && (
         <div>
+          <ValidationConstraints schema={schema} onChange={onChange} type="array" />
           <div style={ms.sectionHeader}>Items Schema</div>
           <div style={ms.nested}>
             <SchemaEditor
@@ -555,7 +694,7 @@ function CompositionEditor({
               Schema {idx + 1}
               {s.$ref && (
                 <span style={{ marginLeft: 6, color: 'var(--vscode-textLink-foreground, #3794ff)' }}>
-                  → {s.$ref.replace('#/components/schemas/', '')}
+                  → {s.$ref.replace('#/components/', '')}
                 </span>
               )}
               {s.type && !s.$ref && (
@@ -697,7 +836,7 @@ function PropertyRow({
   const displayType = getDisplayType(schema);
   const complex = isComplex(displayType);
   const isPrimitive = !complex && displayType !== '$ref';
-  const childTypes = depth >= 1 ? LEAF_TYPES : ALL_TYPES;
+  const childTypes = depth >= 2 ? LEAF_TYPES : ALL_TYPES;
 
   useEffect(() => { setLocalName(name); }, [name]);
 
@@ -748,7 +887,7 @@ function PropertyRow({
               onChange={e => onSchemaChange({ $ref: e.target.value })}
             >
               {availableRefs.map(r => (
-                <option key={r} value={r}>{r.replace('#/components/schemas/', '')}</option>
+                <option key={r} value={r}>{r.replace('#/components/', '')}</option>
               ))}
             </select>
           ) : (
@@ -857,7 +996,7 @@ function PropertyRow({
         </div>
       )}
 
-      {/* Expanded: enum + example + default for primitive types */}
+      {/* Expanded: enum + example + default + constraints for primitive types */}
       {expanded && isPrimitive && (
         <div style={ms.nested}>
           <EnumEditor
@@ -898,6 +1037,7 @@ function PropertyRow({
               />
             </div>
           </div>
+          <ValidationConstraints schema={schema} onChange={onSchemaChange} type={displayType} />
         </div>
       )}
     </div>

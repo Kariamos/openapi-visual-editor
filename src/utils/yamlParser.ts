@@ -26,6 +26,15 @@ export interface OpenApiSchema {
   format?: string;
   example?: unknown;
   default?: unknown;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  title?: string;
   $ref?: string;
   [key: string]: unknown;
 }

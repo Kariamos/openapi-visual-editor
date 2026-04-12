@@ -31,7 +31,7 @@ npm run compile         # tsc → out/
 - `webview/components/Sidebar.tsx` → endpoint list, filter, add/delete
 - `webview/components/InfoEditor.tsx` → API info form (title, version, description)
 - `webview/components/EndpointEditor.tsx` → tabbed editor (General, Parameters, Request Body, Responses, Examples, Security)
-- `webview/components/SchemaEditor.tsx` → recursive JSON Schema editor (primitives, objects, arrays, $ref, allOf/oneOf/anyOf/not), depth-capped at 2
+- `webview/components/SchemaEditor.tsx` → recursive JSON Schema editor (primitives, objects, arrays, $ref, allOf/oneOf/anyOf/not), depth-capped at 3
 - `webview/components/ExamplesEditor.tsx` → example management, auto-generation from schema, curl/fetch snippet modal
 
 ## Communication Protocol (extension ↔ webview)

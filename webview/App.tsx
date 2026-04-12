@@ -35,6 +35,15 @@ export interface OpenApiSchema {
   format?: string;
   example?: unknown;
   default?: unknown;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  title?: string;
   $ref?: string;
   allOf?: OpenApiSchema[];
   oneOf?: OpenApiSchema[];
@@ -497,7 +506,11 @@ export function App(): React.ReactElement {
                 onMethodChange={(m) => handleMethodChange(selectedPath, selectedMethod, m)}
                 usedMethods={Object.keys(doc.paths?.[selectedPath] ?? {}) as HttpMethod[]}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
-                availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
+                availableRefs={[
+                  ...Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`),
+                  ...Object.keys(doc.components?.parameters ?? {}).map(k => `#/components/parameters/${k}`),
+                  ...Object.keys(doc.components?.responses ?? {}).map(k => `#/components/responses/${k}`),
+                ]}
                 components={doc.components?.schemas ?? {}}
                 servers={doc.servers ?? []}
               />
