@@ -41,7 +41,13 @@ jobs:
         run: cd webview && npm ci
 
       - name: Bump version in package.json
-        run: npm version ${{ inputs.version }} --no-git-tag-version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          if [ "$CURRENT" != "${{ inputs.version }}" ]; then
+            npm version ${{ inputs.version }} --no-git-tag-version
+          else
+            echo "Version already set to ${{ inputs.version }}, skipping bump"
+          fi
 
       - name: Build all
         run: npm run build:all
@@ -49,13 +55,17 @@ jobs:
       - name: Package VSIX
         run: npx vsce package
 
-      - name: Commit version bump, tag and push
+      - name: Commit version bump (if needed), tag and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "chore: bump version to ${{ inputs.version }}"
-          git tag -a "v${{ inputs.version }}" -m "v${{ inputs.version }}"
+          if ! git diff --quiet package.json 2>/dev/null; then
+            git add package.json
+            git commit -m "chore: bump version to ${{ inputs.version }}"
+          fi
+          if ! git tag -l "v${{ inputs.version }}" | grep -q .; then
+            git tag -a "v${{ inputs.version }}" -m "v${{ inputs.version }}"
+          fi
           git push origin main --tags
 
       - name: Create GitHub Release with VSIX
