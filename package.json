@@ -55,7 +55,8 @@
     "pretest": "npm run compile",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@stoplight/spectral-core": "^1.21.0",
@@ -69,6 +70,7 @@
     "@types/vscode": "^1.85.0",
     "@vitest/coverage-v8": "^4.1.4",
     "@vscode/vsce": "^2.22.0",
+    "patch-package": "^8.0.1",
     "typescript": "^5.3.0",
     "vitest": "^4.1.4"
   }
