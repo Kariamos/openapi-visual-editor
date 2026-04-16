@@ -52,18 +52,24 @@
     "package": "vsce package",
     "build:webview": "cd webview && npm run build",
     "build:all": "npm run build:webview && npm run compile",
-    "pretest": "npm run compile"
+    "pretest": "npm run compile",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@stoplight/spectral-core": "^1.21.0",
     "@stoplight/spectral-rulesets": "^1.22.0",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "yaml-diff-patch": "^2.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@vitest/coverage-v8": "^4.1.4",
     "@vscode/vsce": "^2.22.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.4"
   }
 }
