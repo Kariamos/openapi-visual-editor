@@ -2,7 +2,7 @@
   "name": "openapi-visual-editor",
   "displayName": "OpenAPI Visual Editor",
   "description": "A graphical editor for OpenAPI/Swagger YAML specifications",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "publisher": "MarcoMinucci",
   "icon": "icon.png",
   "repository": {
