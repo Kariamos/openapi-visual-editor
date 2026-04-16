@@ -1,0 +1,13 @@
+diff --git a/node_modules/yaml-diff-patch/dist/index.js b/node_modules/yaml-diff-patch/dist/index.js
+index 7a41f20..2552889 100644
+--- a/node_modules/yaml-diff-patch/dist/index.js
++++ b/node_modules/yaml-diff-patch/dist/index.js
+@@ -17,7 +17,7 @@ function traverse(root, op, path) {
+         if ((0, helpers_1.isYamlSeq)(parent))
+             parent = parent.get(parseInt(segment), true);
+         else
+-            parent = parent.get(segment, true);
++            parent = parent.get((0, fast_json_patch_1.unescapePathComponent)(segment), true);
+         if (!(0, helpers_1.isYamlMap)(parent) && !(0, helpers_1.isYamlSeq)(parent)) {
+             throw new Error(`Can't ${op} node at path ${path}. ` +
+                 `${pathTo(index)} is ${parent === null || parent === void 0 ? void 0 : parent.type}.`);
