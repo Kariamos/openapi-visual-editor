@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { parseOpenApi, serializeOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
+import { yamlOverwrite } from 'yaml-diff-patch';
 import { runSpectralValidation } from './utils/spectralValidator';
 
 export interface WebviewMessage {
@@ -114,7 +115,12 @@ export class OpenApiEditorProvider {
    */
   async syncFromWebview(data: OpenApiDocument): Promise<void> {
     try {
-      const yamlString = serializeOpenApi(data);
+      // Patch the original YAML in-place to preserve formatting (quotes, comments,
+      // indentation style). Falls back to full re-serialization for new files.
+      const yamlString = this.lastYamlString
+        ? yamlOverwrite(this.lastYamlString, data as Record<string, unknown>)
+        : serializeOpenApi(data);
+      this.lastYamlString = yamlString;
       const encoded = Buffer.from(yamlString, 'utf8');
 
       // Suppress the next file-change event so we don't echo back what we
@@ -136,12 +142,8 @@ export class OpenApiEditorProvider {
           case 'edit':
             if (message.content) {
               await this.syncFromWebview(message.content as OpenApiDocument);
-              // Re-run Spectral on the edited document
-              if (this.lastYamlString) {
-                const yamlString = serializeOpenApi(message.content as OpenApiDocument);
-                this.lastYamlString = yamlString;
-                this.runSpectralAsync(yamlString);
-              }
+              // Re-run Spectral on the patched YAML (lastYamlString updated by syncFromWebview)
+              this.runSpectralAsync(this.lastYamlString);
             }
             break;
 
