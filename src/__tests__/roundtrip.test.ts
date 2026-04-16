@@ -90,4 +90,58 @@ describe('YAML round-trip with yamlOverwrite', () => {
     expect(result).toContain("summary: 'Get users'");
     expect(result).toContain('/health');
   });
+
+  // Regression for bug: yaml-diff-patch v2.0.0 failed to unescape intermediate
+  // JSON Pointer segments, so path keys containing "/" (every OpenAPI path)
+  // produced "Can't add node at path ... /paths is undefined". Patched via
+  // patches/yaml-diff-patch+2.0.0.patch.
+  it('adding response to path with slashes and {params} works', () => {
+    const yaml = `\
+openapi: '3.0.1'
+info:
+  title: 'API'
+  version: '1.0.0'
+paths:
+  '/campaigns/{campaign}/bugs/{bugId}/tags':
+    get:
+      summary: 'Get tags'
+      responses:
+        '200':
+          description: 'OK'
+`;
+    const doc = parseOpenApi(yaml);
+    const op = doc.paths!['/campaigns/{campaign}/bugs/{bugId}/tags']!.get!;
+    op.responses!['500'] = { description: 'Server Error' };
+
+    const result = yamlOverwrite(yaml, doc as Record<string, unknown>);
+
+    // New keys may be quoted with either style; key presence + surrounding
+    // preservation is what matters.
+    expect(result).toMatch(/['"]500['"]:/);
+    expect(result).toContain('Server Error');
+    expect(result).toContain("'200':");
+    expect(result).toContain("summary: 'Get tags'");
+  });
+
+  it('modifying deeply nested field under parametrized path', () => {
+    const yaml = `\
+openapi: '3.0.1'
+info:
+  title: 'API'
+  version: '1.0.0'
+paths:
+  '/users/{id}/posts/{postId}':
+    get:
+      responses:
+        '200':
+          description: 'OK'
+`;
+    const doc = parseOpenApi(yaml);
+    doc.paths!['/users/{id}/posts/{postId}']!.get!.responses!['200'].description = 'Found';
+
+    const result = yamlOverwrite(yaml, doc as Record<string, unknown>);
+
+    expect(result).toContain('Found');
+    expect(result).not.toContain("description: 'OK'");
+  });
 });
