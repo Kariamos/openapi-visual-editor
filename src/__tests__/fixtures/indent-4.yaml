@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+    title: Indent 4 API
+    version: 1.0.0
+    description: Uses 4-space indentation
+paths:
+    /ping:
+        get:
+            summary: Ping
+            responses:
+                '200':
+                    description: pong
+components:
+    schemas:
+        Ping:
+            type: object
+            properties:
+                message:
+                    type: string

@@ -61,10 +61,12 @@ Then install the `.vsix` file via `code --install-extension openapi-visual-edito
 
 ## Known Limitations
 
-- **YAML comments are not preserved.** `js-yaml` does not support round-tripping comments.
+- **YAML comments are not preserved.** `js-yaml` does not support round-tripping comments, and `yaml-diff-patch` inherits this limitation. Comments in untouched sections survive because the surrounding text is left verbatim, but comments inside a modified sub-tree are discarded when that sub-tree is re-serialized.
+- **YAML anchors and aliases (`&`, `*`) are not preserved.** `js-yaml`'s `dump` is invoked with `noRefs: true`; OpenAPI conventionally uses JSON `$ref` instead, so this is rarely a concern.
+- **Non-standard indentation is normalized to 2 spaces on modification.** A file authored with 4-space indentation round-trips byte-identically when untouched, but any modification causes `yaml-diff-patch` to re-emit the affected region using `js-yaml`'s default 2-space indent.
 - Only OpenAPI 3.x is fully supported. Swagger 2.0 may partially work.
 - `$ref` references are displayed and selectable but not yet resolved inline.
-- Schema nesting is capped at depth 2 in the visual editor to prevent infinite recursion.
+- Schema nesting is capped at depth 3 in the visual editor to prevent infinite recursion; data below that depth is passed through unchanged on save.
 
 ## Project Structure
 

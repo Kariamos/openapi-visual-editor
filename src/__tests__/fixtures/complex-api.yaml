@@ -1,0 +1,684 @@
+openapi: 3.0.3
+info:
+  title: Sample Marketplace API
+  description: |
+    A generic, multi-domain API used as a fixture for round-trip tests.
+    Covers the breadth of OpenAPI 3.0 features encountered in enterprise
+    specs: multiple servers with variables, reusable parameters/responses,
+    allOf/oneOf/anyOf, discriminators, vendor extensions, multiple security
+    schemes, and multipart uploads.
+  version: 2.4.0
+  termsOfService: https://example.com/terms
+  contact:
+    name: API Support
+    email: support@example.com
+    url: https://example.com/support
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  x-logo:
+    url: https://example.com/logo.png
+    altText: Example Marketplace
+x-api-id: sample-marketplace
+x-audience: external-public
+servers:
+  - url: https://{env}.api.example.com/{basePath}
+    description: Primary environment-templated server
+    variables:
+      env:
+        default: prod
+        enum:
+          - prod
+          - staging
+          - dev
+        description: Deployment environment
+      basePath:
+        default: v2
+        description: API version segment
+  - url: https://api-eu.example.com/v2
+    description: EU regional endpoint
+  - url: http://localhost:8080/v2
+    description: Local development server
+tags:
+  - name: users
+    description: Operations on user accounts
+    externalDocs:
+      description: Users guide
+      url: https://example.com/docs/users
+  - name: products
+    description: Catalog operations
+  - name: orders
+    description: Order lifecycle
+  - name: payments
+    description: Payment handling
+  - name: admin
+    description: Administrative endpoints
+  - name: uploads
+    description: Binary asset uploads
+  - name: webhooks
+    description: Webhook subscriptions
+  - name: reports
+    description: Analytical reports
+security:
+  - bearerAuth: []
+paths:
+  /users:
+    get:
+      tags:
+        - users
+      summary: List users
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: role
+          in: query
+          description: Filter by role
+          schema:
+            type: string
+            enum:
+              - admin
+              - customer
+              - support
+      responses:
+        '200':
+          description: Page of users
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/TotalCount'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  nextCursor:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      x-rate-limit: 120
+    post:
+      tags:
+        - users
+      summary: Create user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserIdPath'
+    get:
+      tags:
+        - users
+      summary: Get user
+      operationId: getUser
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - users
+      summary: Update user
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - users
+      summary: Delete user
+      operationId: deleteUser
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+  /products:
+    get:
+      tags:
+        - products
+      summary: List products
+      operationId: listProducts
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Product page
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - products
+      summary: Get product
+      operationId: getProduct
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders:
+    post:
+      tags:
+        - orders
+      summary: Create order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrder'
+      responses:
+        '201':
+          description: Order accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+      callbacks:
+        orderStatus:
+          '{$request.body#/callbackUrl}':
+            post:
+              summary: Order status callback
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OrderStatusEvent'
+              responses:
+                '200':
+                  description: Callback acknowledged
+  /orders/{orderId}/payments:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - payments
+      summary: Submit payment
+      operationId: submitPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInstruction'
+      responses:
+        '202':
+          description: Payment accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+      x-idempotency: required
+  /uploads:
+    post:
+      tags:
+        - uploads
+      summary: Upload asset
+      operationId: uploadAsset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                metadata:
+                  type: object
+                  additionalProperties:
+                    type: string
+            encoding:
+              file:
+                contentType: application/octet-stream
+              metadata:
+                contentType: application/json
+      responses:
+        '201':
+          description: Upload completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assetId:
+                    type: string
+  /reports/sales:
+    get:
+      tags:
+        - reports
+      summary: Sales report
+      operationId: salesReport
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: groupBy
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - day
+                - product
+                - region
+      responses:
+        '200':
+          description: Report payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesReport'
+components:
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page index (0-based)
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    PageSizeParam:
+      name: pageSize
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    UserIdPath:
+      name: userId
+      in: path
+      required: true
+      description: User identifier (UUID)
+      schema:
+        type: string
+        format: uuid
+  headers:
+    TotalCount:
+      description: Total number of items across all pages
+      schema:
+        type: integer
+        minimum: 0
+  responses:
+    BadRequest:
+      description: The request is malformed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/authorize
+          tokenUrl: https://auth.example.com/token
+          refreshUrl: https://auth.example.com/refresh
+          scopes:
+            read: Read access
+            write: Write access
+            admin: Administrative access
+  schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              issue:
+                type: string
+    Identifiable:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NewUser:
+      type: object
+      required:
+        - email
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 254
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          type: string
+          enum:
+            - admin
+            - customer
+            - support
+          default: customer
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          type: string
+          enum:
+            - admin
+            - customer
+            - support
+    User:
+      allOf:
+        - $ref: '#/components/schemas/Identifiable'
+        - type: object
+          required:
+            - email
+            - name
+            - role
+          properties:
+            email:
+              type: string
+              format: email
+            name:
+              type: string
+            role:
+              type: string
+              enum:
+                - admin
+                - customer
+                - support
+            preferences:
+              type: object
+              additionalProperties:
+                type: string
+          x-persistence: primary-db
+    Product:
+      type: object
+      required:
+        - sku
+        - name
+        - price
+      properties:
+        sku:
+          type: string
+          pattern: '^[A-Z0-9-]{3,20}$'
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          multipleOf: 0.01
+        tags:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    NewOrder:
+      type: object
+      required:
+        - customerId
+        - items
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - sku
+              - quantity
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+        callbackUrl:
+          type: string
+          format: uri
+    Order:
+      allOf:
+        - $ref: '#/components/schemas/Identifiable'
+        - type: object
+          properties:
+            customerId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum:
+                - pending
+                - paid
+                - shipped
+                - cancelled
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  sku:
+                    type: string
+                  quantity:
+                    type: integer
+                  unitPrice:
+                    type: number
+    PaymentInstruction:
+      oneOf:
+        - $ref: '#/components/schemas/CardPayment'
+        - $ref: '#/components/schemas/BankPayment'
+        - $ref: '#/components/schemas/WalletPayment'
+      discriminator:
+        propertyName: method
+        mapping:
+          card: '#/components/schemas/CardPayment'
+          bank: '#/components/schemas/BankPayment'
+          wallet: '#/components/schemas/WalletPayment'
+    CardPayment:
+      type: object
+      required:
+        - method
+        - cardToken
+      properties:
+        method:
+          type: string
+          enum:
+            - card
+        cardToken:
+          type: string
+    BankPayment:
+      type: object
+      required:
+        - method
+        - iban
+      properties:
+        method:
+          type: string
+          enum:
+            - bank
+        iban:
+          type: string
+    WalletPayment:
+      type: object
+      required:
+        - method
+        - walletId
+      properties:
+        method:
+          type: string
+          enum:
+            - wallet
+        walletId:
+          type: string
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - accepted
+            - settled
+            - failed
+        reference:
+          anyOf:
+            - type: string
+            - type: integer
+    OrderStatusEvent:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+    SalesReport:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        groups:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              total:
+                type: number
+              currency:
+                type: string
+                default: EUR
