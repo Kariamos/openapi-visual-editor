@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { parseOpenApi, serializeOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
-import { yamlOverwrite } from 'yaml-diff-patch';
+import { parseOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
+import { stringifyOpenApiPreservingSource } from './utils/stringifyOpenApi';
 import { runSpectralValidation } from './utils/spectralValidator';
 
 export interface WebviewMessage {
@@ -21,7 +21,12 @@ export class OpenApiEditorProvider {
   private fileUri: vscode.Uri;
   private context: vscode.ExtensionContext;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
-  private suppressNextChange = false;
+  /**
+   * Number of self-initiated writes whose corresponding file-change events
+   * have not yet been observed. Using a counter (instead of a boolean flag)
+   * correctly handles rapid consecutive saves without losing external edits.
+   */
+  private pendingSelfWrites = 0;
   private disposables: vscode.Disposable[] = [];
   /** Incremented on each validation to discard stale Spectral results */
   private validationSeq = 0;
@@ -59,6 +64,11 @@ export class OpenApiEditorProvider {
    * Sends validation errors alongside the document when present.
    */
   async syncToWebview(yamlString: string): Promise<void> {
+    // Capture the source buffer before parsing so that even if parsing fails
+    // (or the webview edits before Spectral returns) we have the original
+    // formatting to diff against on the next write.
+    this.lastYamlString = yamlString;
+
     let doc: OpenApiDocument;
     try {
       doc = parseOpenApi(yamlString);
@@ -85,7 +95,6 @@ export class OpenApiEditorProvider {
     this.panel.webview.postMessage(msg);
 
     // Run Spectral validation asynchronously (don't block the UI)
-    this.lastYamlString = yamlString;
     this.runSpectralAsync(yamlString);
   }
 
@@ -116,16 +125,21 @@ export class OpenApiEditorProvider {
   async syncFromWebview(data: OpenApiDocument): Promise<void> {
     try {
       // Patch the original YAML in-place to preserve formatting (quotes, comments,
-      // indentation style). Falls back to full re-serialization for new files.
-      const yamlString = this.lastYamlString
-        ? yamlOverwrite(this.lastYamlString, data as Record<string, unknown>)
-        : serializeOpenApi(data);
+      // indentation style). Falls back to full re-serialization for new files
+      // and re-emits JSON when the source was JSON.
+      const yamlString = stringifyOpenApiPreservingSource(this.lastYamlString, data);
       this.lastYamlString = yamlString;
       const encoded = Buffer.from(yamlString, 'utf8');
 
-      // Suppress the next file-change event so we don't echo back what we
-      // just wrote from the webview.
-      this.suppressNextChange = true;
+      // Track self-initiated writes so we can ignore the corresponding
+      // file-change event (without swallowing a concurrent external edit).
+      this.pendingSelfWrites += 1;
+      // Safety: if the file watcher never fires (some file systems or
+      // configurations suppress events), decrement after a timeout so we
+      // don't permanently mute external change detection.
+      setTimeout(() => {
+        if (this.pendingSelfWrites > 0) this.pendingSelfWrites -= 1;
+      }, 2000);
       await vscode.workspace.fs.writeFile(this.fileUri, encoded);
     } catch (err) {
       this.sendError(`Failed to write file: ${(err as Error).message}`);
@@ -179,8 +193,8 @@ export class OpenApiEditorProvider {
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     const onChange = async () => {
-      if (this.suppressNextChange) {
-        this.suppressNextChange = false;
+      if (this.pendingSelfWrites > 0) {
+        this.pendingSelfWrites -= 1;
         return;
       }
       await this.openFile(this.fileUri);
