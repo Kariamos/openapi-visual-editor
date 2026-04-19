@@ -117,6 +117,9 @@ export function serializeOpenApi(obj: OpenApiDocument): string {
     sortKeys: false,
     quotingType: '"',
     forceQuotes: false,
+    // noCompatMode prevents YAML 1.1 tokens (yes/no/on/off) from being emitted
+    // for booleans — we keep strict true/false.
+    noCompatMode: true,
     schema: yaml.DEFAULT_SCHEMA,
   });
 }
