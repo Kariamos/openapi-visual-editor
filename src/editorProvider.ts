@@ -123,27 +123,35 @@ export class OpenApiEditorProvider {
    * YAML, and writes it to the file on disk.
    */
   async syncFromWebview(data: OpenApiDocument): Promise<void> {
-    try {
-      // Patch the original YAML in-place to preserve formatting (quotes, comments,
-      // indentation style). Falls back to full re-serialization for new files
-      // and re-emits JSON when the source was JSON.
-      const yamlString = stringifyOpenApiPreservingSource(this.lastYamlString, data);
-      this.lastYamlString = yamlString;
-      const encoded = Buffer.from(yamlString, 'utf8');
+    // Patch the original YAML in-place to preserve formatting (quotes, comments,
+    // indentation style). Falls back to full re-serialization for new files
+    // and re-emits JSON when the source was JSON.
+    const yamlString = stringifyOpenApiPreservingSource(this.lastYamlString, data);
+    const encoded = Buffer.from(yamlString, 'utf8');
 
-      // Track self-initiated writes so we can ignore the corresponding
-      // file-change event (without swallowing a concurrent external edit).
-      this.pendingSelfWrites += 1;
-      // Safety: if the file watcher never fires (some file systems or
-      // configurations suppress events), decrement after a timeout so we
-      // don't permanently mute external change detection.
-      setTimeout(() => {
-        if (this.pendingSelfWrites > 0) this.pendingSelfWrites -= 1;
-      }, 2000);
+    // Track self-initiated writes so we can ignore the corresponding
+    // file-change event (without swallowing a concurrent external edit).
+    this.pendingSelfWrites += 1;
+    // Safety: if the file watcher never fires (some file systems or
+    // configurations suppress events), decrement after a timeout so we
+    // don't permanently mute external change detection.
+    setTimeout(() => {
+      if (this.pendingSelfWrites > 0) this.pendingSelfWrites -= 1;
+    }, 2000);
+
+    try {
       await vscode.workspace.fs.writeFile(this.fileUri, encoded);
     } catch (err) {
+      // Write failed — leave lastYamlString unchanged so the next edit is
+      // still diffed against the on-disk source, and give back the counter.
+      if (this.pendingSelfWrites > 0) this.pendingSelfWrites -= 1;
       this.sendError(`Failed to write file: ${(err as Error).message}`);
+      return;
     }
+
+    // Only update the cached source after the write has succeeded so that
+    // a failed write does not desync lastYamlString from disk.
+    this.lastYamlString = yamlString;
   }
 
   /**
@@ -193,9 +201,21 @@ export class OpenApiEditorProvider {
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     const onChange = async () => {
+      // Only treat the event as a self-write if the file content on disk
+      // actually matches what we just wrote. A bare counter can drop a
+      // concurrent external edit when event ordering is not guaranteed.
       if (this.pendingSelfWrites > 0) {
-        this.pendingSelfWrites -= 1;
-        return;
+        let currentContent: string | undefined;
+        try {
+          const raw = await vscode.workspace.fs.readFile(this.fileUri);
+          currentContent = Buffer.from(raw).toString('utf8');
+        } catch {
+          currentContent = undefined;
+        }
+        if (currentContent !== undefined && currentContent === this.lastYamlString) {
+          this.pendingSelfWrites -= 1;
+          return;
+        }
       }
       await this.openFile(this.fileUri);
     };

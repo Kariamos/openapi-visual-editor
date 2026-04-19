@@ -59,12 +59,24 @@ export function lineSetDiff(
 }
 
 /**
- * Counts newline-only or whitespace-only lines between non-empty lines. Helps
- * assert that an edit did not introduce stray blank lines.
+ * Counts runs of blank lines (empty or whitespace-only) of at least
+ * `minLength` consecutive lines. Helps assert that an edit did not introduce
+ * stray blank lines.
  */
 export function countBlankRuns(text: string, minLength = 2): number {
-  const matches = text.match(new RegExp(`\\n{${minLength},}`, 'g'));
-  return matches ? matches.length : 0;
+  const lines = text.split('\n');
+  let run = 0;
+  let runs = 0;
+  for (const line of lines) {
+    if (line.trim().length === 0) {
+      run += 1;
+      continue;
+    }
+    if (run >= minLength) runs += 1;
+    run = 0;
+  }
+  if (run >= minLength) runs += 1;
+  return runs;
 }
 
 /**
