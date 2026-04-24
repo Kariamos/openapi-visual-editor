@@ -13,7 +13,9 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 - **Schema editor** — recursive visual editor for JSON Schema, supporting primitives, objects, arrays, `$ref`, and composition keywords (`allOf`, `oneOf`, `anyOf`, `not`)
 - **Examples editor** — manage request/response examples with auto-generation from schemas and curl/fetch snippet generation
 - **Security schemes** — toggle security requirements per endpoint
+- **Validation** — real-time OpenAPI linting via [Spectral](https://stoplight.io/open-source/spectral) (OAS ruleset + custom rules) with a collapsible diagnostics panel showing errors, warnings, and hints grouped by category
 - **Bidirectional sync** — changes in the visual editor update the YAML file and vice versa (debounced at 400ms)
+- **Format preservation** — minimal in-place patches via `yaml-diff-patch`; unchanged regions survive byte-identical; JSON files stay JSON
 - **File watcher** — external changes to the file are detected and reflected in the editor
 - **VS Code theme integration** — fully respects your current VS Code color theme (light and dark)
 
@@ -31,17 +33,9 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 git clone https://github.com/Kariamos/openapi-visual-editor.git
 cd openapi-visual-editor
 
-# Install extension dependencies
-npm install
-
-# Install webview dependencies and build
-cd webview
-npm install
-npm run build
-cd ..
-
-# Compile the extension
-npm run compile
+# Install all dependencies and build everything
+npm install && cd webview && npm install && cd ..
+npm run build:all
 ```
 
 ### Run in Development
@@ -57,7 +51,7 @@ npm run compile
 npm run package
 ```
 
-Then install the `.vsix` file via `code --install-extension openapi-visual-editor-0.0.1.vsix`.
+Then install the `.vsix` file via `code --install-extension openapi-visual-editor-1.6.1.vsix`.
 
 ## Known Limitations
 
@@ -72,11 +66,23 @@ Then install the `.vsix` file via `code --install-extension openapi-visual-edito
 
 ```
 openapi-visual-editor/
-├── src/                          # VS Code extension (Node.js)
-│   ├── extension.ts              # Entry point, command registration
+├── src/                          # VS Code extension (Node.js, TypeScript)
+│   ├── extension.ts              # Entry point, command registration, panel map
 │   ├── editorProvider.ts         # WebviewPanel lifecycle, bidirectional sync
-│   └── utils/
-│       └── yamlParser.ts         # YAML parse/serialize/validate
+│   ├── utils/
+│   │   ├── yamlParser.ts         # YAML parsing, OpenAPI types
+│   │   ├── stringifyOpenApi.ts   # Format-preserving serialization (yaml-diff-patch)
+│   │   ├── spectralValidator.ts  # Spectral OAS validation + custom rules
+│   │   ├── debounce.ts           # Debounce utility with cancel()
+│   │   └── inputFormat.ts        # JSON vs YAML format detection
+│   └── __tests__/                # Vitest test suite
+│       ├── yamlParser.test.ts
+│       ├── roundtrip.test.ts
+│       ├── data-loss.test.ts
+│       ├── complex-spec.test.ts
+│       ├── deep-nesting.test.ts
+│       ├── debounce.test.ts
+│       └── inputFormat.test.ts
 ├── webview/                      # React app (rendered inside VS Code WebView)
 │   ├── main.tsx                  # React entry point + VS Code API bridge
 │   ├── App.tsx                   # Root component, state management, types
@@ -84,11 +90,16 @@ openapi-visual-editor/
 │   │   ├── Sidebar.tsx           # Endpoint list with filter and CRUD
 │   │   ├── InfoEditor.tsx        # API info form
 │   │   ├── EndpointEditor.tsx    # Tabbed endpoint editor
-│   │   ├── SchemaEditor.tsx      # Recursive JSON Schema editor
-│   │   └── ExamplesEditor.tsx    # Examples + snippet generation
+│   │   ├── SchemaEditor.tsx      # Recursive JSON Schema editor (depth-capped at 3)
+│   │   ├── JsonSchemaEditor.tsx  # Single-field schema editor for primitives
+│   │   ├── ExamplesEditor.tsx    # Examples + curl/fetch snippet generation
+│   │   └── DiagnosticsPanel.tsx  # Collapsible Spectral validation results
+│   ├── utils/
+│   │   ├── constants.ts          # HTTP methods, colors, status codes
+│   │   └── diagnostics.ts        # Client-side validation hints
 │   ├── index.html                # WebView HTML shell
 │   ├── vite.config.ts            # Vite build config (single IIFE bundle)
-│   └── package.json              # WebView dependencies (React 18, Vite 5)
+│   └── package.json              # WebView dependencies (React 18, Vite 5, CodeMirror)
 ├── examples/
 │   └── petstore.yaml             # Sample OpenAPI spec for testing
 └── package.json                  # Extension manifest
