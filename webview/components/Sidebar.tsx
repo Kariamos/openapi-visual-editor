@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import type { OpenApiPaths, HttpMethod } from "../App";
+import type { OpenApiPaths, HttpMethod, OpenApiSchema } from "../App";
 import { METHOD_COLORS, HTTP_METHODS } from "../utils/constants";
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
+
+type ActiveTab = 'endpoints' | 'models';
 
 const styles = {
   sidebar: {
@@ -17,14 +19,10 @@ const styles = {
   header: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: "10px 12px",
+    justifyContent: "flex-end",
+    padding: "6px 12px",
     borderBottom: "1px solid var(--vscode-widget-border, #444)",
-    fontSize: "11px",
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.5px",
-    color: "var(--vscode-sideBarTitle-foreground, #bbb)",
+    gap: 4,
   },
   addBtn: {
     background: "var(--vscode-button-background, #0e639c)",
@@ -104,6 +102,27 @@ const styles = {
     textAlign: "center" as const,
     padding: "24px 12px",
   },
+  tabBar: {
+    display: "flex",
+    borderBottom: "1px solid var(--vscode-widget-border, #444)",
+  },
+  tab: {
+    flex: 1,
+    padding: "6px 0",
+    background: "transparent",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    cursor: "pointer",
+    fontSize: "11px",
+    fontWeight: 600 as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+    color: "var(--vscode-sideBarTitle-foreground, #bbb)",
+  },
+  tabActive: {
+    borderBottom: "2px solid var(--vscode-focusBorder, #007fd4)",
+    color: "var(--vscode-foreground, #ccc)",
+  },
 };
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -118,13 +137,18 @@ interface SidebarProps {
   onAdd: () => void;
   onDelete: (path: string, method: HttpMethod) => void;
   onSort: (mode: SortMode) => void;
+  schemas: Record<string, OpenApiSchema>;
+  selectedModel: string | null;
+  onSelectModel: (name: string) => void;
+  onAddModel: () => void;
+  onDeleteModel: (name: string) => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 const SORT_LABELS: Record<SortMode, string> = {
-  'path-asc': 'Path A\u2192Z',
-  'path-desc': 'Path Z\u2192A',
+  'path-asc': 'Path A→Z',
+  'path-desc': 'Path Z→A',
   'method': 'HTTP Method',
   'tag': 'Tag',
 };
@@ -137,10 +161,16 @@ export function Sidebar({
   onAdd,
   onDelete,
   onSort,
+  schemas,
+  selectedModel,
+  onSelectModel,
+  onAddModel,
+  onDeleteModel,
 }: SidebarProps): React.ReactElement {
   const [filter, setFilter] = useState("");
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('endpoints');
 
   // Build a flat list of (path, method) pairs
   const entries: Array<{ path: string; method: HttpMethod; summary?: string }> =
@@ -155,7 +185,7 @@ export function Sidebar({
     }
   }
 
-  // Filter
+  // Filter endpoints
   const filtered = filter
     ? entries.filter(
         (e) =>
@@ -165,11 +195,35 @@ export function Sidebar({
       )
     : entries;
 
+  // Filter models
+  const modelNames = Object.keys(schemas);
+  const filteredModels = filter
+    ? modelNames.filter((n) => n.toLowerCase().includes(filter.toLowerCase()))
+    : modelNames;
+
   return (
     <div style={styles.sidebar}>
+      {/* Tab bar */}
+      <div style={styles.tabBar}>
+        {(['endpoints', 'models'] as ActiveTab[]).map((tab) => (
+          <button
+            key={tab}
+            style={{
+              ...styles.tab,
+              ...(activeTab === tab ? styles.tabActive : {}),
+            }}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === 'endpoints'
+              ? 'Endpoints'
+              : `Models${modelNames.length > 0 ? ` (${modelNames.length})` : ''}`}
+          </button>
+        ))}
+      </div>
+
+      {/* Header row with Add (and Sort for endpoints) */}
       <div style={styles.header}>
-        <span>Endpoints</span>
-        <div style={{ display: 'flex', gap: 4 }}>
+        {activeTab === 'endpoints' && (
           <div style={{ position: 'relative' }}>
             <button
               style={{
@@ -180,7 +234,7 @@ export function Sidebar({
               onClick={() => setShowSortMenu(!showSortMenu)}
               title="Sort endpoints"
             >
-              {'\u2195'} Sort
+              {'↕'} Sort
             </button>
             {showSortMenu && (
               <div style={{
@@ -223,76 +277,142 @@ export function Sidebar({
               </div>
             )}
           </div>
-          <button style={styles.addBtn} onClick={onAdd} title="Add new endpoint">
-            + Add
-          </button>
-        </div>
+        )}
+        <button
+          style={styles.addBtn}
+          onClick={activeTab === 'endpoints' ? onAdd : onAddModel}
+          title={activeTab === 'endpoints' ? 'Add new endpoint' : 'Add new model'}
+        >
+          + Add
+        </button>
       </div>
 
       <input
         style={styles.searchBox}
         type="text"
-        placeholder="Filter endpoints..."
+        placeholder={activeTab === 'endpoints' ? 'Filter endpoints...' : 'Filter models...'}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
 
-      <div style={styles.list}>
-        {filtered.length === 0 && (
-          <div style={styles.emptyState}>
-            {entries.length === 0
-              ? 'No endpoints yet. Click "+ Add" to create one.'
-              : "No matching endpoints."}
-          </div>
-        )}
-
-        {filtered.map((entry) => {
-          const itemKey = `${entry.method}:${entry.path}`;
-          const isSelected =
-            selectedPath === entry.path && selectedMethod === entry.method;
-          const isHovered = hoveredItem === itemKey;
-
-          return (
-            <div
-              key={itemKey}
-              style={{
-                ...styles.item,
-                ...(isSelected ? styles.itemSelected : {}),
-                ...(isHovered && !isSelected ? styles.itemHover : {}),
-              }}
-              onClick={() => onSelect(entry.path, entry.method)}
-              onMouseEnter={() => setHoveredItem(itemKey)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <span
-                style={{
-                  ...styles.methodBadge,
-                  background: METHOD_COLORS[entry.method] ?? "#666",
-                  color: "#fff",
-                }}
-              >
-                {entry.method}
-              </span>
-              <span style={styles.pathLabel} title={entry.path}>
-                {entry.path}
-              </span>
-              <button
-                style={{
-                  ...styles.deleteBtn,
-                  opacity: isHovered ? 1 : 0,
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(entry.path, entry.method);
-                }}
-                title="Delete endpoint"
-              >
-                ✕
-              </button>
+      {/* Endpoints list */}
+      {activeTab === 'endpoints' && (
+        <div style={styles.list}>
+          {filtered.length === 0 && (
+            <div style={styles.emptyState}>
+              {entries.length === 0
+                ? 'No endpoints yet. Click "+ Add" to create one.'
+                : "No matching endpoints."}
             </div>
-          );
-        })}
-      </div>
+          )}
+
+          {filtered.map((entry) => {
+            const itemKey = `${entry.method}:${entry.path}`;
+            const isSelected =
+              selectedPath === entry.path && selectedMethod === entry.method;
+            const isHovered = hoveredItem === itemKey;
+
+            return (
+              <div
+                key={itemKey}
+                style={{
+                  ...styles.item,
+                  ...(isSelected ? styles.itemSelected : {}),
+                  ...(isHovered && !isSelected ? styles.itemHover : {}),
+                }}
+                onClick={() => onSelect(entry.path, entry.method)}
+                onMouseEnter={() => setHoveredItem(itemKey)}
+                onMouseLeave={() => setHoveredItem(null)}
+              >
+                <span
+                  style={{
+                    ...styles.methodBadge,
+                    background: METHOD_COLORS[entry.method] ?? "#666",
+                    color: "#fff",
+                  }}
+                >
+                  {entry.method}
+                </span>
+                <span style={styles.pathLabel} title={entry.path}>
+                  {entry.path}
+                </span>
+                <button
+                  style={{
+                    ...styles.deleteBtn,
+                    opacity: isHovered ? 1 : 0,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(entry.path, entry.method);
+                  }}
+                  title="Delete endpoint"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Models list */}
+      {activeTab === 'models' && (
+        <div style={styles.list}>
+          {filteredModels.length === 0 && (
+            <div style={styles.emptyState}>
+              {modelNames.length === 0
+                ? 'No models yet. Click "+ Add" to create one.'
+                : "No matching models."}
+            </div>
+          )}
+
+          {filteredModels.map((modelName) => {
+            const isSelected = selectedModel === modelName;
+            const isHovered = hoveredItem === `model:${modelName}`;
+
+            return (
+              <div
+                key={modelName}
+                style={{
+                  ...styles.item,
+                  ...(isSelected ? styles.itemSelected : {}),
+                  ...(isHovered && !isSelected ? styles.itemHover : {}),
+                }}
+                onClick={() => onSelectModel(modelName)}
+                onMouseEnter={() => setHoveredItem(`model:${modelName}`)}
+                onMouseLeave={() => setHoveredItem(null)}
+              >
+                <span
+                  style={{
+                    ...styles.methodBadge,
+                    background: 'var(--vscode-badge-background, #4d4d4d)',
+                    color: 'var(--vscode-badge-foreground, #fff)',
+                    fontSize: '9px',
+                  }}
+                >
+                  {schemas[modelName]?.type?.toUpperCase() ?? 'OBJ'}
+                </span>
+                <span style={styles.pathLabel} title={modelName}>
+                  {modelName}
+                </span>
+                <button
+                  style={{
+                    ...styles.deleteBtn,
+                    opacity: isHovered ? 1 : 0,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteModel(modelName);
+                  }}
+                  title="Delete model"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

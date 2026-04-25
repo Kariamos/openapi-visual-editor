@@ -3,6 +3,7 @@ import { vscode } from './main';
 import { Sidebar, type SortMode } from './components/Sidebar';
 import { InfoEditor } from './components/InfoEditor';
 import { EndpointEditor } from './components/EndpointEditor';
+import { ModelsEditor } from './components/ModelsEditor';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { validateDocument, type Diagnostic } from './utils/diagnostics';
 import { HTTP_METHODS } from './utils/constants';
@@ -169,6 +170,7 @@ export function App(): React.ReactElement {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<HttpMethod | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [spectralDiagnostics, setSpectralDiagnostics] = useState<Diagnostic[]>([]);
 
   // Use a ref to debounce outgoing edits so we don't flood the extension with
@@ -241,6 +243,7 @@ export function App(): React.ReactElement {
   const handleSelect = useCallback((pathKey: string, method: HttpMethod) => {
     setSelectedPath(pathKey);
     setSelectedMethod(method);
+    setSelectedModel(null);
   }, []);
 
   // ── Add new endpoint ──────────────────────────────────────────────────────
@@ -441,6 +444,89 @@ export function App(): React.ReactElement {
     [doc, notifyExtension]
   );
 
+  // ── Model selection ───────────────────────────────────────────────────────
+  const handleSelectModel = useCallback((name: string) => {
+    setSelectedModel(name);
+    setSelectedPath(null);
+    setSelectedMethod(null);
+  }, []);
+
+  // ── Add new model ─────────────────────────────────────────────────────────
+  const handleAddModel = useCallback(() => {
+    if (!doc) { return; }
+    const newName = getUniqueName('NewModel', doc.components?.schemas ?? {});
+    const updated: OpenApiDocument = {
+      ...doc,
+      components: {
+        ...doc.components,
+        schemas: {
+          ...(doc.components?.schemas ?? {}),
+          [newName]: { type: 'object', properties: {} },
+        },
+      },
+    };
+    setDoc(updated);
+    notifyExtension(updated);
+    setSelectedModel(newName);
+    setSelectedPath(null);
+    setSelectedMethod(null);
+  }, [doc, notifyExtension]);
+
+  // ── Delete model ──────────────────────────────────────────────────────────
+  const handleDeleteModel = useCallback(
+    (name: string) => {
+      if (!doc) { return; }
+      const schemas = { ...(doc.components?.schemas ?? {}) };
+      delete schemas[name];
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: { ...doc.components, schemas },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+      if (selectedModel === name) { setSelectedModel(null); }
+    },
+    [doc, notifyExtension, selectedModel]
+  );
+
+  // ── Model schema change ───────────────────────────────────────────────────
+  const handleModelChange = useCallback(
+    (name: string, schema: OpenApiSchema) => {
+      if (!doc) { return; }
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: {
+          ...doc.components,
+          schemas: { ...(doc.components?.schemas ?? {}), [name]: schema },
+        },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+    },
+    [doc, notifyExtension]
+  );
+
+  // ── Model rename ──────────────────────────────────────────────────────────
+  const handleModelRename = useCallback(
+    (oldName: string, newName: string) => {
+      if (!doc) { return; }
+      const existing = doc.components?.schemas ?? {};
+      if (newName in existing) { return; }
+      const schemas: Record<string, OpenApiSchema> = {};
+      for (const [k, v] of Object.entries(existing)) {
+        schemas[k === oldName ? newName : k] = v;
+      }
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: { ...doc.components, schemas },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+      setSelectedModel(newName);
+    },
+    [doc, notifyExtension]
+  );
+
   // ── Real-time diagnostics (must be before any early returns — hooks rule) ──
   const customDiagnostics = useMemo(() => {
     if (!doc) return [];
@@ -489,6 +575,11 @@ export function App(): React.ReactElement {
           onAdd={handleAddEndpoint}
           onDelete={handleDeleteEndpoint}
           onSort={handleSort}
+          schemas={doc.components?.schemas ?? {}}
+          selectedModel={selectedModel}
+          onSelectModel={handleSelectModel}
+          onAddModel={handleAddModel}
+          onDeleteModel={handleDeleteModel}
         />
 
         <div style={styles.rightPanel}>
@@ -514,12 +605,21 @@ export function App(): React.ReactElement {
                 components={doc.components?.schemas ?? {}}
                 servers={doc.servers ?? []}
               />
+            ) : selectedModel && doc.components?.schemas?.[selectedModel] !== undefined ? (
+              <ModelsEditor
+                name={selectedModel}
+                schema={doc.components.schemas[selectedModel]}
+                onChange={(schema) => handleModelChange(selectedModel, schema)}
+                onRename={handleModelRename}
+                existingNames={Object.keys(doc.components?.schemas ?? {})}
+                availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
+              />
             ) : (
               <div style={styles.emptyState}>
                 <div>
-                  <p>Select an endpoint from the sidebar</p>
+                  <p>Select an endpoint or model from the sidebar</p>
                   <p style={{ marginTop: 8, fontSize: '12px' }}>
-                    or click <strong>+ Add Endpoint</strong> to create one
+                    or click <strong>+ Add</strong> to create one
                   </p>
                 </div>
               </div>
@@ -543,4 +643,13 @@ function getUniquePath(base: string, existingPaths: OpenApiPaths): string {
     counter++;
   }
   return `${base}-${counter}`;
+}
+
+function getUniqueName(base: string, existing: Record<string, unknown>): string {
+  if (!(base in existing)) { return base; }
+  let counter = 1;
+  while (`${base}${counter}` in existing) {
+    counter++;
+  }
+  return `${base}${counter}`;
 }

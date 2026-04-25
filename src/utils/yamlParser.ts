@@ -112,7 +112,7 @@ export function parseOpenApi(yamlString: string): OpenApiDocument {
 export function serializeOpenApi(obj: OpenApiDocument): string {
   return yaml.dump(obj, {
     indent: 2,
-    lineWidth: 120,
+    lineWidth: -1,
     noRefs: true,
     sortKeys: false,
     quotingType: '"',

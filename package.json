@@ -62,6 +62,7 @@
     "@stoplight/spectral-core": "^1.21.0",
     "@stoplight/spectral-rulesets": "^1.22.0",
     "js-yaml": "^4.1.0",
+    "yaml": "^2.8.3",
     "yaml-diff-patch": "^2.0.0"
   },
   "devDependencies": {
