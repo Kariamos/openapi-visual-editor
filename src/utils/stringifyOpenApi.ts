@@ -1,22 +1,31 @@
 import { yamlOverwrite } from 'yaml-diff-patch';
-import { parseDocument } from 'yaml';
+import { parseDocument, parse as yamlParse } from 'yaml';
+import { compare } from 'fast-json-patch';
 import { serializeOpenApi, OpenApiDocument } from './yamlParser';
 import { detectFormat } from './inputFormat';
+import { applyJsonPatchToYamlSource, JsonPatchOp } from './yamlSurgicalPatch';
 
 /**
  * Produces a serialized form of `doc` that preserves the formatting of the
  * original `source` string whenever possible.
  *
- * - For a YAML source, uses yaml-diff-patch to apply a minimal in-place patch
- *   so that untouched sections keep their quoting, indentation, and key order.
- * - For a JSON source, re-emits JSON with 2-space indent so the file keeps its
- *   original format instead of silently becoming YAML.
- * - When the source is empty (first write on a brand-new file), falls back to
- *   a full YAML serialization.
+ * Strategy, in order:
  *
- * yaml-diff-patch hard-codes lineWidth:80 when serializing patched values, so
- * we re-parse its output and re-stringify with lineWidth:0 to prevent it from
- * inserting unwanted line breaks into long description strings.
+ * 1. Empty source (brand-new file) → full YAML serialization.
+ * 2. JSON source → re-emit JSON so the file does not silently become YAML.
+ * 3. Diff `source` against `doc` (RFC-6902 via fast-json-patch, comparing
+ *    against the same eemeli parse that the patcher uses):
+ *    a. Empty diff → return `source` byte-for-byte. This guarantees that
+ *       opening a document and saving without changes NEVER rewrites the file.
+ *    b. Apply the diff surgically (see yamlSurgicalPatch.ts): only the byte
+ *       ranges of the changed nodes are spliced; every untouched line —
+ *       including 1000+ character single-line strings that any re-emit would
+ *       re-wrap — survives verbatim. The surgical result is verified by
+ *       re-parsing before being trusted.
+ *    c. Fallback: yaml-diff-patch whole-document patch. Its output re-wraps
+ *       long lines at 80 columns (it calls Document.toString() with default
+ *       options), so we re-emit with lineWidth: 0 and restore the original
+ *       line-ending style. Semantically always correct, cosmetically lossy.
  */
 export function stringifyOpenApiPreservingSource(
   source: string,
@@ -28,13 +37,30 @@ export function stringifyOpenApiPreservingSource(
   if (detectFormat(source) === 'json') {
     return JSON.stringify(doc, null, 2) + '\n';
   }
+
+  let oldJson: unknown;
+  try {
+    oldJson = yamlParse(source, { uniqueKeys: false });
+  } catch {
+    oldJson = undefined;
+  }
+
+  if (oldJson !== undefined && oldJson !== null && typeof oldJson === 'object') {
+    const ops = compare(oldJson as object, doc as object) as JsonPatchOp[];
+    // No changes: return the original source byte-for-byte to preserve
+    // everything (comments, line endings, long lines, trailing whitespace).
+    if (ops.length === 0) return source;
+
+    const surgical = applyJsonPatchToYamlSource(source, ops, doc);
+    if (surgical !== null) return surgical;
+  }
+
+  // Legacy fallback: whole-document patch + global re-emit.
   const patched = yamlOverwrite(source, doc as Record<string, unknown>);
-  // No changes: return the original source byte-for-byte to preserve everything
-  // (comments, line endings, trailing whitespace, etc.).
   if (patched === source) return source;
-  // yaml-diff-patch serializes changed string values with lineWidth:80, which
-  // inserts unwanted line breaks into long descriptions. Re-parse and re-stringify
-  // with lineWidth:0 to remove them, then restore the original line-ending style.
+  // yaml-diff-patch serializes with lineWidth:80, which inserts unwanted line
+  // breaks into long strings. Re-emit with lineWidth:0 to remove them, then
+  // restore the original line-ending style.
   const usesCRLF = source.includes('\r\n');
   const fixed = parseDocument(patched).toString({ lineWidth: 0 });
   return usesCRLF ? fixed.replace(/\n/g, '\r\n') : fixed;
