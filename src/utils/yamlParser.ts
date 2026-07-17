@@ -86,7 +86,13 @@ export interface OpenApiDocument {
 export function parseOpenApi(yamlString: string): OpenApiDocument {
   let parsed: unknown;
   try {
-    parsed = yaml.load(yamlString, { schema: yaml.DEFAULT_SCHEMA });
+    // JSON_SCHEMA (not DEFAULT_SCHEMA) is used deliberately: OpenAPI documents
+    // are JSON-compatible, and the YAML 1.1 DEFAULT_SCHEMA coerces implicit
+    // scalars into JS types that do not survive the JSON postMessage boundary
+    // to the webview. In particular `example: 2021-01-01` would become a Date
+    // and be silently rewritten to `2021-01-01T00:00:00.000Z`. JSON_SCHEMA
+    // keeps such values as plain strings, matching OpenAPI semantics.
+    parsed = yaml.load(yamlString, { schema: yaml.JSON_SCHEMA });
   } catch (err) {
     if (err instanceof yaml.YAMLException) {
       const mark = err.mark;
