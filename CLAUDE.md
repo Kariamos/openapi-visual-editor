@@ -31,6 +31,7 @@ npm run compile         # tsc → out/
 - `src/utils/yamlParser.ts` → `parseOpenApi()` (js-yaml with **`JSON_SCHEMA`**, not DEFAULT_SCHEMA — see Key Decisions), `serializeOpenApi()`, `looksLikeOpenApi()` + all OpenAPI TypeScript types (`OpenApiDocument`, `OpenApiOperation`, `OpenApiSchema`, `OpenApiParameter`, `OpenApiResponse`, `HttpMethod`, etc.)
 - `src/utils/stringifyOpenApi.ts` → `stringifyOpenApiPreservingSource(source, doc)` — pipeline: empty source → full serialize; JSON source → JSON.stringify; otherwise diff source vs doc with `fast-json-patch`: empty diff → return source byte-for-byte; else surgical splice via `yamlSurgicalPatch.ts`; else fallback to `yaml-diff-patch` + `lineWidth: 0` re-emit (+ CRLF restore)
 - `src/utils/yamlSurgicalPatch.ts` → `applyJsonPatchToYamlSource(source, ops, expected?)` — applies an RFC-6902 patch by splicing only the byte ranges of changed nodes (located via eemeli `parseDocument` `node.range` offsets). Untouched lines survive verbatim (critical for large Stoplight exports with 1000+ char lines). Conservative: returns `null` on anything uncertain (flow collections with items, last-key removal, overlapping splices) and re-parses the result to verify it deep-equals `expected` — the caller then falls back
+- `src/utils/yamlLocate.ts` → `locateYamlNode(source, path)` returns the `{start, end}` byte range of the node at a doc path (map-entry ranges start at the key); `offsetToLineCol(source, offset)` maps a byte offset to `{line, col}`. Powers the `reveal` message (highlight a node in the YAML text editor)
 - `src/utils/spectralValidator.ts` → `runSpectralValidation(yamlString)` — runs Spectral OAS ruleset + 8 custom rules; returns typed `SpectralDiagnostic[]`
 - `src/utils/debounce.ts` → `debounce(fn, ms)` — returns debounced function with `.cancel()` method
 - `src/utils/inputFormat.ts` → `detectFormat(text)` — returns `'json'` or `'yaml'` by inspecting first non-whitespace char
@@ -48,14 +49,15 @@ npm run compile         # tsc → out/
 ### WebView (`webview/`)
 
 - `webview/main.tsx` → acquires VS Code API singleton (`acquireVsCodeApi()`), shim for browser dev, mounts React, sends `{ type: 'ready' }` on load
-- `webview/App.tsx` → root component; all OpenAPI types duplicated here (see Key Decisions); state: `doc`, `fatalError`, `selectedPath`, `selectedMethod`, `spectralDiagnostics`; 400ms debounce before posting `edit` back to extension
-- `webview/components/Sidebar.tsx` → endpoint list, search filter, add/delete, method color badges
+- `webview/App.tsx` → root component; all OpenAPI types duplicated here (see Key Decisions); state: `doc`, `fatalError`, `selectedPath`, `selectedMethod`, `selectedModel`, `selectedComponent`, `sidebarTab`, `spectralDiagnostics`; 400ms debounce before posting `edit` back to extension; wraps the tree in `RefNavigationContext.Provider` and posts `reveal` messages
+- `webview/components/Sidebar.tsx` → two tabs: **Endpoints** (list, filter, sort, add/delete) and **Components** (grouped sections: Schemas + securitySchemes/parameters/responses/headers/requestBodies, each with add/delete + a `{ }` reveal button)
 - `webview/components/InfoEditor.tsx` → API info form (title, version, description, termsOfService)
-- `webview/components/EndpointEditor.tsx` → tabbed editor (General, Parameters, Request Body, Responses, Examples, Security)
-- `webview/components/SchemaEditor.tsx` → recursive JSON Schema editor (primitives, objects, arrays, `$ref`, `allOf`/`oneOf`/`anyOf`/`not`), depth-capped at 3
+- `webview/components/EndpointEditor.tsx` → tabbed editor (General, Parameters, Request Body, Responses, Examples, Security); header has a `{ } YAML` reveal button
+- `webview/components/SchemaEditor.tsx` → recursive JSON Schema editor (primitives, objects, arrays, `$ref`, `allOf`/`oneOf`/`anyOf`/`not`), depth-capped at 3; exports `RefNavigationContext` and renders a `→` go-to-definition button next to any internal `$ref`
 - `webview/components/JsonSchemaEditor.tsx` → single-item primitive schema editor (string, integer, boolean, etc.) used inside SchemaEditor
 - `webview/components/ExamplesEditor.tsx` → example management, auto-generation from schema, curl/fetch snippet modal
-- `webview/components/ModelsEditor.tsx` → editor for `components/schemas` (Models tab in the sidebar): add/rename/delete schemas, edit via SchemaEditor
+- `webview/components/ModelsEditor.tsx` → editor for `components/schemas` (the Schemas section): add/rename/delete schemas, edit via SchemaEditor
+- `webview/components/ComponentsEditor.tsx` → editors for the non-schema `components` categories: securitySchemes (apiKey/http/oauth2 flows+scopes/openIdConnect/mutualTLS), parameters, headers, responses, requestBodies; reuses `SchemaEditor` and `ContentBodyEditor`
 - `webview/components/DiagnosticsPanel.tsx` → collapsible panel; shows Spectral + client-side hints grouped by category (error/warning/info)
 - `webview/utils/constants.ts` → `HTTP_METHODS`, `METHOD_COLORS`, `HTTP_STATUS_CODES`
 - `webview/utils/diagnostics.ts` → `validateDocument(doc)` — client-side hints not covered by Spectral (media type format, unused tags, schema hints)
@@ -71,6 +73,7 @@ npm run compile         # tsc → out/
 - `{ type: 'ready' }` — triggers initial file load
 - `{ type: 'edit', content: OpenApiDocument }` — user made a change (debounced 400ms)
 - `{ type: 'showError', content: string }` — user-initiated error surfacing
+- `{ type: 'reveal', content: Array<string|number> }` — reveal a doc path (e.g. `['paths','/users','get']`) in the YAML text editor; the extension locates the node byte range via `yamlLocate.ts` and selects/scrolls to it in a side-by-side editor
 
 ## Testing
 
@@ -90,6 +93,7 @@ Test files:
 - `deep-nesting.test.ts` — deeply nested schema handling
 - `type-coercion.test.ts` — implicit YAML scalars (dates, times, bool words) must NOT be coerced across the postMessage JSON boundary
 - `surgical-patch.test.ts` — surgical byte-splice editing on the Stoplight-like fixture (no-op byte-identity, single-line diffs, add/remove locality, CRLF, fallback safety)
+- `yamlLocate.test.ts` — node byte-range location + offset→line/col (powers the `reveal` message)
 - `debounce.test.ts` — debounce utility behavior
 - `inputFormat.test.ts` — JSON vs YAML detection
 

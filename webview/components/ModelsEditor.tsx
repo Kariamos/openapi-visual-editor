@@ -11,6 +11,7 @@ interface ModelsEditorProps {
   onRename: (oldName: string, newName: string) => void;
   existingNames: string[];
   availableRefs?: string[];
+  onReveal?: () => void;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ export function ModelsEditor({
   onRename,
   existingNames,
   availableRefs = [],
+  onReveal,
 }: ModelsEditorProps): React.ReactElement {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -135,6 +137,24 @@ export function ModelsEditor({
           </span>
         )}
         <span style={styles.refBadge}>#/components/schemas/{name}</span>
+        {onReveal && (
+          <button
+            style={{
+              background: 'transparent',
+              color: 'var(--vscode-textLink-foreground, #3794ff)',
+              border: '1px solid var(--vscode-widget-border, #444)',
+              borderRadius: 3,
+              padding: '2px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            onClick={onReveal}
+            title="Show in YAML source"
+          >
+            {'{ }'} YAML
+          </button>
+        )}
       </div>
 
       {renameError && <div style={styles.errorMsg}>{renameError}</div>}
