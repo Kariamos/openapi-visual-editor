@@ -1,10 +1,15 @@
 import React, { useState } from "react";
 import type { OpenApiPaths, HttpMethod, OpenApiSchema } from "../App";
 import { METHOD_COLORS, HTTP_METHODS } from "../utils/constants";
+import {
+  COMPONENT_CATEGORIES,
+  CATEGORY_LABELS,
+  type ComponentCategory,
+} from "./ComponentsEditor";
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
-type ActiveTab = 'endpoints' | 'models';
+export type ActiveTab = 'endpoints' | 'components';
 
 const styles = {
   sidebar: {
@@ -96,6 +101,18 @@ const styles = {
     padding: "0 4px",
     flexShrink: 0,
   },
+  revealBtn: {
+    opacity: 0,
+    background: "transparent",
+    color: "var(--vscode-textLink-foreground, #3794ff)",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "11px",
+    lineHeight: 1,
+    padding: "0 2px",
+    flexShrink: 0,
+    fontFamily: "var(--vscode-editor-font-family, monospace)",
+  },
   emptyState: {
     color: "var(--vscode-descriptionForeground, #9d9d9d)",
     fontSize: "12px",
@@ -123,11 +140,36 @@ const styles = {
     borderBottom: "2px solid var(--vscode-focusBorder, #007fd4)",
     color: "var(--vscode-foreground, #ccc)",
   },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 12px 3px",
+    fontSize: "10px",
+    fontWeight: 700 as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+    color: "var(--vscode-sideBarSectionHeader-foreground, #999)",
+  },
+  sectionAddBtn: {
+    background: "transparent",
+    color: "var(--vscode-textLink-foreground, #3794ff)",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "12px",
+    lineHeight: 1,
+    padding: "0 2px",
+  },
 };
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
 export type SortMode = 'path-asc' | 'path-desc' | 'method' | 'tag';
+
+export interface ComponentSelection {
+  category: ComponentCategory;
+  name: string;
+}
 
 interface SidebarProps {
   paths: OpenApiPaths;
@@ -142,6 +184,14 @@ interface SidebarProps {
   onSelectModel: (name: string) => void;
   onAddModel: () => void;
   onDeleteModel: (name: string) => void;
+  componentsByCategory: Record<ComponentCategory, string[]>;
+  selectedComponent: ComponentSelection | null;
+  onSelectComponent: (sel: ComponentSelection) => void;
+  onAddComponent: (category: ComponentCategory) => void;
+  onDeleteComponent: (sel: ComponentSelection) => void;
+  activeTab: ActiveTab;
+  onTabChange: (tab: ActiveTab) => void;
+  onReveal?: (path: Array<string | number>) => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -166,11 +216,18 @@ export function Sidebar({
   onSelectModel,
   onAddModel,
   onDeleteModel,
+  componentsByCategory,
+  selectedComponent,
+  onSelectComponent,
+  onAddComponent,
+  onDeleteComponent,
+  activeTab,
+  onTabChange,
+  onReveal,
 }: SidebarProps): React.ReactElement {
   const [filter, setFilter] = useState("");
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('endpoints');
 
   // Build a flat list of (path, method) pairs
   const entries: Array<{ path: string; method: HttpMethod; summary?: string }> =
@@ -201,29 +258,96 @@ export function Sidebar({
     ? modelNames.filter((n) => n.toLowerCase().includes(filter.toLowerCase()))
     : modelNames;
 
+  const totalComponents =
+    modelNames.length +
+    COMPONENT_CATEGORIES.reduce((n, c) => n + componentsByCategory[c].length, 0);
+
+  const renderListItem = (opts: {
+    key: string;
+    badge: string;
+    badgeColor: string;
+    label: string;
+    selected: boolean;
+    onClick: () => void;
+    onDeleteClick: () => void;
+    deleteTitle: string;
+    revealPath?: Array<string | number>;
+  }) => {
+    const isHovered = hoveredItem === opts.key;
+    return (
+      <div
+        key={opts.key}
+        style={{
+          ...styles.item,
+          ...(opts.selected ? styles.itemSelected : {}),
+          ...(isHovered && !opts.selected ? styles.itemHover : {}),
+        }}
+        onClick={opts.onClick}
+        onMouseEnter={() => setHoveredItem(opts.key)}
+        onMouseLeave={() => setHoveredItem(null)}
+      >
+        <span
+          style={{
+            ...styles.methodBadge,
+            background: opts.badgeColor,
+            color: "#fff",
+            fontSize: "9px",
+          }}
+        >
+          {opts.badge}
+        </span>
+        <span style={styles.pathLabel} title={opts.label}>
+          {opts.label}
+        </span>
+        {onReveal && opts.revealPath && (
+          <button
+            style={{ ...styles.revealBtn, opacity: isHovered ? 1 : 0 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onReveal(opts.revealPath!);
+            }}
+            title="Show in YAML source"
+          >
+            {'{ }'}
+          </button>
+        )}
+        <button
+          style={{ ...styles.deleteBtn, opacity: isHovered ? 1 : 0 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            opts.onDeleteClick();
+          }}
+          title={opts.deleteTitle}
+        >
+          ✕
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div style={styles.sidebar}>
       {/* Tab bar */}
       <div style={styles.tabBar}>
-        {(['endpoints', 'models'] as ActiveTab[]).map((tab) => (
+        {(['endpoints', 'components'] as ActiveTab[]).map((tab) => (
           <button
             key={tab}
             style={{
               ...styles.tab,
               ...(activeTab === tab ? styles.tabActive : {}),
             }}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => onTabChange(tab)}
           >
             {tab === 'endpoints'
               ? 'Endpoints'
-              : `Models${modelNames.length > 0 ? ` (${modelNames.length})` : ''}`}
+              : `Components${totalComponents > 0 ? ` (${totalComponents})` : ''}`}
           </button>
         ))}
       </div>
 
       {/* Header row with Add (and Sort for endpoints) */}
-      <div style={styles.header}>
-        {activeTab === 'endpoints' && (
+      {activeTab === 'endpoints' && (
+        <div style={styles.header}>
           <div style={{ position: 'relative' }}>
             <button
               style={{
@@ -277,20 +401,16 @@ export function Sidebar({
               </div>
             )}
           </div>
-        )}
-        <button
-          style={styles.addBtn}
-          onClick={activeTab === 'endpoints' ? onAdd : onAddModel}
-          title={activeTab === 'endpoints' ? 'Add new endpoint' : 'Add new model'}
-        >
-          + Add
-        </button>
-      </div>
+          <button style={styles.addBtn} onClick={onAdd} title="Add new endpoint">
+            + Add
+          </button>
+        </div>
+      )}
 
       <input
         style={styles.searchBox}
         type="text"
-        placeholder={activeTab === 'endpoints' ? 'Filter endpoints...' : 'Filter models...'}
+        placeholder={activeTab === 'endpoints' ? 'Filter endpoints...' : 'Filter components...'}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
@@ -306,109 +426,88 @@ export function Sidebar({
             </div>
           )}
 
-          {filtered.map((entry) => {
-            const itemKey = `${entry.method}:${entry.path}`;
-            const isSelected =
-              selectedPath === entry.path && selectedMethod === entry.method;
-            const isHovered = hoveredItem === itemKey;
-
-            return (
-              <div
-                key={itemKey}
-                style={{
-                  ...styles.item,
-                  ...(isSelected ? styles.itemSelected : {}),
-                  ...(isHovered && !isSelected ? styles.itemHover : {}),
-                }}
-                onClick={() => onSelect(entry.path, entry.method)}
-                onMouseEnter={() => setHoveredItem(itemKey)}
-                onMouseLeave={() => setHoveredItem(null)}
-              >
-                <span
-                  style={{
-                    ...styles.methodBadge,
-                    background: METHOD_COLORS[entry.method] ?? "#666",
-                    color: "#fff",
-                  }}
-                >
-                  {entry.method}
-                </span>
-                <span style={styles.pathLabel} title={entry.path}>
-                  {entry.path}
-                </span>
-                <button
-                  style={{
-                    ...styles.deleteBtn,
-                    opacity: isHovered ? 1 : 0,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(entry.path, entry.method);
-                  }}
-                  title="Delete endpoint"
-                >
-                  ✕
-                </button>
-              </div>
-            );
-          })}
+          {filtered.map((entry) =>
+            renderListItem({
+              key: `${entry.method}:${entry.path}`,
+              badge: entry.method,
+              badgeColor: METHOD_COLORS[entry.method] ?? "#666",
+              label: entry.path,
+              selected:
+                selectedPath === entry.path && selectedMethod === entry.method,
+              onClick: () => onSelect(entry.path, entry.method),
+              onDeleteClick: () => onDelete(entry.path, entry.method),
+              deleteTitle: "Delete endpoint",
+              revealPath: ['paths', entry.path, entry.method],
+            })
+          )}
         </div>
       )}
 
-      {/* Models list */}
-      {activeTab === 'models' && (
+      {/* Components list — grouped by category */}
+      {activeTab === 'components' && (
         <div style={styles.list}>
-          {filteredModels.length === 0 && (
-            <div style={styles.emptyState}>
-              {modelNames.length === 0
-                ? 'No models yet. Click "+ Add" to create one.'
-                : "No matching models."}
-            </div>
+          {/* Schemas (models) */}
+          <div style={styles.sectionHeader}>
+            <span>Schemas ({modelNames.length})</span>
+            <button
+              style={styles.sectionAddBtn}
+              onClick={onAddModel}
+              title="Add schema"
+            >
+              +
+            </button>
+          </div>
+          {filteredModels.map((modelName) =>
+            renderListItem({
+              key: `model:${modelName}`,
+              badge: schemas[modelName]?.type?.toUpperCase().slice(0, 6) ?? 'OBJ',
+              badgeColor: 'var(--vscode-badge-background, #4d4d4d)',
+              label: modelName,
+              selected: selectedModel === modelName,
+              onClick: () => onSelectModel(modelName),
+              onDeleteClick: () => onDeleteModel(modelName),
+              deleteTitle: "Delete schema",
+              revealPath: ['components', 'schemas', modelName],
+            })
           )}
 
-          {filteredModels.map((modelName) => {
-            const isSelected = selectedModel === modelName;
-            const isHovered = hoveredItem === `model:${modelName}`;
-
+          {/* Other component categories */}
+          {COMPONENT_CATEGORIES.map((category) => {
+            const names = componentsByCategory[category];
+            const visibleNames = filter
+              ? names.filter((n) => n.toLowerCase().includes(filter.toLowerCase()))
+              : names;
             return (
-              <div
-                key={modelName}
-                style={{
-                  ...styles.item,
-                  ...(isSelected ? styles.itemSelected : {}),
-                  ...(isHovered && !isSelected ? styles.itemHover : {}),
-                }}
-                onClick={() => onSelectModel(modelName)}
-                onMouseEnter={() => setHoveredItem(`model:${modelName}`)}
-                onMouseLeave={() => setHoveredItem(null)}
-              >
-                <span
-                  style={{
-                    ...styles.methodBadge,
-                    background: 'var(--vscode-badge-background, #4d4d4d)',
-                    color: 'var(--vscode-badge-foreground, #fff)',
-                    fontSize: '9px',
-                  }}
-                >
-                  {schemas[modelName]?.type?.toUpperCase() ?? 'OBJ'}
-                </span>
-                <span style={styles.pathLabel} title={modelName}>
-                  {modelName}
-                </span>
-                <button
-                  style={{
-                    ...styles.deleteBtn,
-                    opacity: isHovered ? 1 : 0,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteModel(modelName);
-                  }}
-                  title="Delete model"
-                >
-                  ✕
-                </button>
-              </div>
+              <React.Fragment key={category}>
+                <div style={styles.sectionHeader}>
+                  <span>{CATEGORY_LABELS[category]} ({names.length})</span>
+                  <button
+                    style={styles.sectionAddBtn}
+                    onClick={() => onAddComponent(category)}
+                    title={`Add ${CATEGORY_LABELS[category].replace(/s$/, '').toLowerCase()}`}
+                  >
+                    +
+                  </button>
+                </div>
+                {visibleNames.map((name) =>
+                  renderListItem({
+                    key: `${category}:${name}`,
+                    badge: CATEGORY_LABELS[category]
+                      .replace(/s$/, '')
+                      .toUpperCase()
+                      .slice(0, 6),
+                    badgeColor: 'var(--vscode-badge-background, #4d4d4d)',
+                    label: name,
+                    selected:
+                      selectedComponent?.category === category &&
+                      selectedComponent?.name === name,
+                    onClick: () => onSelectComponent({ category, name }),
+                    onDeleteClick: () => onDeleteComponent({ category, name }),
+                    deleteTitle: `Delete ${name}`,
+                    revealPath: ['components', category, name],
+                  })
+                )}
+              </React.Fragment>
             );
           })}
         </div>

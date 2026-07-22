@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { vscode } from './main';
-import { Sidebar, type SortMode } from './components/Sidebar';
+import { Sidebar, type SortMode, type ActiveTab, type ComponentSelection } from './components/Sidebar';
 import { InfoEditor } from './components/InfoEditor';
 import { EndpointEditor } from './components/EndpointEditor';
 import { ModelsEditor } from './components/ModelsEditor';
+import {
+  ComponentsEditor,
+  COMPONENT_CATEGORIES,
+  type ComponentCategory,
+} from './components/ComponentsEditor';
+import { RefNavigationContext } from './components/SchemaEditor';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { validateDocument, type Diagnostic } from './utils/diagnostics';
 import { HTTP_METHODS } from './utils/constants';
@@ -171,6 +177,8 @@ export function App(): React.ReactElement {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<HttpMethod | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedComponent, setSelectedComponent] = useState<ComponentSelection | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<ActiveTab>('endpoints');
   const [spectralDiagnostics, setSpectralDiagnostics] = useState<Diagnostic[]>([]);
 
   // Use a ref to debounce outgoing edits so we don't flood the extension with
@@ -244,6 +252,7 @@ export function App(): React.ReactElement {
     setSelectedPath(pathKey);
     setSelectedMethod(method);
     setSelectedModel(null);
+    setSelectedComponent(null);
   }, []);
 
   // ── Add new endpoint ──────────────────────────────────────────────────────
@@ -449,6 +458,7 @@ export function App(): React.ReactElement {
     setSelectedModel(name);
     setSelectedPath(null);
     setSelectedMethod(null);
+    setSelectedComponent(null);
   }, []);
 
   // ── Add new model ─────────────────────────────────────────────────────────
@@ -470,6 +480,7 @@ export function App(): React.ReactElement {
     setSelectedModel(newName);
     setSelectedPath(null);
     setSelectedMethod(null);
+    setSelectedComponent(null);
   }, [doc, notifyExtension]);
 
   // ── Delete model ──────────────────────────────────────────────────────────
@@ -527,6 +538,123 @@ export function App(): React.ReactElement {
     [doc, notifyExtension]
   );
 
+  // ── Generic component CRUD (securitySchemes/parameters/responses/…) ──────
+  const handleSelectComponent = useCallback((sel: ComponentSelection) => {
+    setSelectedComponent(sel);
+    setSelectedModel(null);
+    setSelectedPath(null);
+    setSelectedMethod(null);
+  }, []);
+
+  const handleAddComponent = useCallback(
+    (category: ComponentCategory) => {
+      if (!doc) { return; }
+      const existing = (doc.components?.[category] ?? {}) as Record<string, unknown>;
+      const newName = getUniqueName('New' + category.charAt(0).toUpperCase() + category.slice(1, -1), existing);
+      const skeleton: Record<ComponentCategory, unknown> = {
+        securitySchemes: { type: 'http', scheme: 'bearer' },
+        parameters: { name: 'param', in: 'query', required: false, schema: { type: 'string' } },
+        responses: { description: 'OK' },
+        headers: { description: '', schema: { type: 'string' } },
+        requestBodies: { content: { 'application/json': { schema: { type: 'object', properties: {} } } } },
+      };
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: {
+          ...doc.components,
+          [category]: { ...existing, [newName]: skeleton[category] },
+        },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+      handleSelectComponent({ category, name: newName });
+    },
+    [doc, notifyExtension, handleSelectComponent]
+  );
+
+  const handleDeleteComponent = useCallback(
+    (sel: ComponentSelection) => {
+      if (!doc) { return; }
+      const existing = { ...((doc.components?.[sel.category] ?? {}) as Record<string, unknown>) };
+      delete existing[sel.name];
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: { ...doc.components, [sel.category]: existing },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+      if (selectedComponent?.category === sel.category && selectedComponent?.name === sel.name) {
+        setSelectedComponent(null);
+      }
+    },
+    [doc, notifyExtension, selectedComponent]
+  );
+
+  const handleComponentChange = useCallback(
+    (sel: ComponentSelection, value: Record<string, unknown>) => {
+      if (!doc) { return; }
+      const existing = (doc.components?.[sel.category] ?? {}) as Record<string, unknown>;
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: {
+          ...doc.components,
+          [sel.category]: { ...existing, [sel.name]: value },
+        },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+    },
+    [doc, notifyExtension]
+  );
+
+  const handleComponentRename = useCallback(
+    (sel: ComponentSelection, newName: string) => {
+      if (!doc) { return; }
+      const existing = (doc.components?.[sel.category] ?? {}) as Record<string, unknown>;
+      if (newName in existing) { return; }
+      const rebuilt: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(existing)) {
+        rebuilt[k === sel.name ? newName : k] = v;
+      }
+      const updated: OpenApiDocument = {
+        ...doc,
+        components: { ...doc.components, [sel.category]: rebuilt },
+      };
+      setDoc(updated);
+      notifyExtension(updated);
+      setSelectedComponent({ category: sel.category, name: newName });
+    },
+    [doc, notifyExtension]
+  );
+
+  // ── $ref navigation (#/components/<category>/<name>) ─────────────────────
+  const handleNavigateRef = useCallback(
+    (ref: string) => {
+      if (!doc) { return; }
+      const m = ref.match(/^#\/components\/([^/]+)\/(.+)$/);
+      if (!m) { return; }
+      const category = m[1];
+      const name = m[2].replace(/~1/g, '/').replace(/~0/g, '~');
+      if (category === 'schemas') {
+        if (doc.components?.schemas?.[name] === undefined) { return; }
+        handleSelectModel(name);
+      } else if ((COMPONENT_CATEGORIES as string[]).includes(category)) {
+        const bucket = (doc.components?.[category] ?? {}) as Record<string, unknown>;
+        if (!(name in bucket)) { return; }
+        handleSelectComponent({ category: category as ComponentCategory, name });
+      } else {
+        return;
+      }
+      setSidebarTab('components');
+    },
+    [doc, handleSelectModel, handleSelectComponent]
+  );
+
+  // ── Reveal a document path in the YAML text editor ────────────────────────
+  const handleReveal = useCallback((path: Array<string | number>) => {
+    vscode.postMessage({ type: 'reveal', content: path });
+  }, []);
+
   // ── Real-time diagnostics (must be before any early returns — hooks rule) ──
   const customDiagnostics = useMemo(() => {
     if (!doc) return [];
@@ -563,7 +691,26 @@ export function App(): React.ReactElement {
       ? doc.paths?.[selectedPath]?.[selectedMethod] ?? null
       : null;
 
+  const componentsByCategory = Object.fromEntries(
+    COMPONENT_CATEGORIES.map((c) => [
+      c,
+      Object.keys((doc.components?.[c] ?? {}) as Record<string, unknown>),
+    ])
+  ) as Record<ComponentCategory, string[]>;
+
+  const schemaRefs = Object.keys(doc.components?.schemas ?? {}).map(
+    (k) => `#/components/schemas/${k}`
+  );
+
+  const currentComponentValue =
+    selectedComponent
+      ? ((doc.components?.[selectedComponent.category] ?? {}) as Record<string, unknown>)[
+          selectedComponent.name
+        ]
+      : undefined;
+
   return (
+    <RefNavigationContext.Provider value={handleNavigateRef}>
     <div style={styles.container}>
       {/* Main content area */}
       <div style={styles.mainArea}>
@@ -580,6 +727,14 @@ export function App(): React.ReactElement {
           onSelectModel={handleSelectModel}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          componentsByCategory={componentsByCategory}
+          selectedComponent={selectedComponent}
+          onSelectComponent={handleSelectComponent}
+          onAddComponent={handleAddComponent}
+          onDeleteComponent={handleDeleteComponent}
+          activeTab={sidebarTab}
+          onTabChange={setSidebarTab}
+          onReveal={handleReveal}
         />
 
         <div style={styles.rightPanel}>
@@ -598,12 +753,13 @@ export function App(): React.ReactElement {
                 usedMethods={Object.keys(doc.paths?.[selectedPath] ?? {}) as HttpMethod[]}
                 availableSchemes={Object.keys(doc.components?.securitySchemes ?? {})}
                 availableRefs={[
-                  ...Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`),
-                  ...Object.keys(doc.components?.parameters ?? {}).map(k => `#/components/parameters/${k}`),
-                  ...Object.keys(doc.components?.responses ?? {}).map(k => `#/components/responses/${k}`),
+                  ...schemaRefs,
+                  ...componentsByCategory.parameters.map(k => `#/components/parameters/${k}`),
+                  ...componentsByCategory.responses.map(k => `#/components/responses/${k}`),
                 ]}
                 components={doc.components?.schemas ?? {}}
                 servers={doc.servers ?? []}
+                onReveal={() => handleReveal(['paths', selectedPath, selectedMethod])}
               />
             ) : selectedModel && doc.components?.schemas?.[selectedModel] !== undefined ? (
               <ModelsEditor
@@ -612,12 +768,26 @@ export function App(): React.ReactElement {
                 onChange={(schema) => handleModelChange(selectedModel, schema)}
                 onRename={handleModelRename}
                 existingNames={Object.keys(doc.components?.schemas ?? {})}
-                availableRefs={Object.keys(doc.components?.schemas ?? {}).map(k => `#/components/schemas/${k}`)}
+                availableRefs={schemaRefs}
+                onReveal={() => handleReveal(['components', 'schemas', selectedModel])}
+              />
+            ) : selectedComponent && currentComponentValue !== undefined ? (
+              <ComponentsEditor
+                category={selectedComponent.category}
+                name={selectedComponent.name}
+                value={currentComponentValue as Record<string, unknown>}
+                onChange={(v) => handleComponentChange(selectedComponent, v)}
+                onRename={(_, newName) => handleComponentRename(selectedComponent, newName)}
+                existingNames={componentsByCategory[selectedComponent.category]}
+                availableRefs={schemaRefs}
+                onReveal={() =>
+                  handleReveal(['components', selectedComponent.category, selectedComponent.name])
+                }
               />
             ) : (
               <div style={styles.emptyState}>
                 <div>
-                  <p>Select an endpoint or model from the sidebar</p>
+                  <p>Select an endpoint or component from the sidebar</p>
                   <p style={{ marginTop: 8, fontSize: '12px' }}>
                     or click <strong>+ Add</strong> to create one
                   </p>
@@ -631,6 +801,7 @@ export function App(): React.ReactElement {
       {/* Diagnostics panel — bottom, like VS Code's Problems panel */}
       <DiagnosticsPanel diagnostics={diagnostics} />
     </div>
+    </RefNavigationContext.Provider>
   );
 }
 

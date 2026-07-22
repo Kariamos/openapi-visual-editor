@@ -5,7 +5,10 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 ## Features
 
 - **Visual endpoint editor** — add, edit, and delete API endpoints via a tabbed UI (General, Parameters, Request Body, Responses, Examples, Security)
-- **Sidebar navigation** — browse and filter all endpoints with color-coded HTTP method badges (GET, POST, PUT, DELETE, PATCH, etc.)
+- **Sidebar navigation** — two tabs (Endpoints and Components); browse and filter all endpoints with color-coded HTTP method badges (GET, POST, PUT, DELETE, PATCH, etc.)
+- **Components editor** — full visual editing for every reusable `components` category: schemas, security schemes (apiKey / http / OAuth2 with flows & scopes / OpenID Connect / mutual TLS), parameters, headers, responses, and request bodies — add, rename, delete, and edit each one
+- **`$ref` navigation** — click the `→` next to any internal `#/components/...` reference to jump straight to the referenced component
+- **Reveal in YAML** — the `{ } YAML` button on any endpoint or component opens the source file beside the editor and highlights the exact lines
 - **Info editor** — edit API title, version, description, and terms of service
 - **Parameter editor** — manage query, path, header, and cookie parameters with type, format, and required toggles
 - **Request body editor** — edit request bodies with multi-content-type support and full schema editing
@@ -15,7 +18,7 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 - **Security schemes** — toggle security requirements per endpoint
 - **Validation** — real-time OpenAPI linting via [Spectral](https://stoplight.io/open-source/spectral) (OAS ruleset + custom rules) with a collapsible diagnostics panel showing errors, warnings, and hints grouped by category
 - **Bidirectional sync** — changes in the visual editor update the YAML file and vice versa (debounced at 400ms)
-- **Format preservation** — minimal in-place patches via `yaml-diff-patch`; unchanged regions survive byte-identical; JSON files stay JSON
+- **Format preservation** — surgical byte-range splicing means only the nodes you edited change; every untouched line (including 1000+ character single-line strings) survives byte-identical, and saving without changes never rewrites the file; JSON files stay JSON
 - **File watcher** — external changes to the file are detected and reflected in the editor
 - **VS Code theme integration** — fully respects your current VS Code color theme (light and dark)
 

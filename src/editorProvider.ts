@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { parseOpenApi, looksLikeOpenApi, OpenApiDocument } from './utils/yamlParser';
 import { stringifyOpenApiPreservingSource } from './utils/stringifyOpenApi';
 import { runSpectralValidation } from './utils/spectralValidator';
+import { locateYamlNode, offsetToLineCol } from './utils/yamlLocate';
 
 export interface WebviewMessage {
   type: string;
@@ -178,6 +179,10 @@ export class OpenApiEditorProvider {
             vscode.window.showErrorMessage(`OpenAPI Visual Editor: ${message.content}`);
             break;
 
+          case 'reveal':
+            await this.revealInTextEditor(message.content as Array<string | number>);
+            break;
+
           default:
             // Unknown message type — ignore
             break;
@@ -187,6 +192,36 @@ export class OpenApiEditorProvider {
       this.disposables
     );
     this.disposables.push(subscription);
+  }
+
+  /**
+   * Opens the underlying YAML/JSON file in a text editor beside the webview
+   * and highlights the region corresponding to the given document path
+   * (e.g. ['paths', '/users', 'get']).
+   */
+  private async revealInTextEditor(docPath: Array<string | number>): Promise<void> {
+    if (!Array.isArray(docPath) || docPath.length === 0) return;
+    try {
+      const textDoc = await vscode.workspace.openTextDocument(this.fileUri);
+      const source = textDoc.getText();
+      const range = locateYamlNode(source, docPath);
+      const editor = await vscode.window.showTextDocument(textDoc, {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus: false,
+        preview: true,
+      });
+      if (!range) return;
+      const startPos = offsetToLineCol(source, range.start);
+      const endPos = offsetToLineCol(source, range.end);
+      const selection = new vscode.Selection(
+        new vscode.Position(startPos.line, startPos.col),
+        new vscode.Position(endPos.line, endPos.col)
+      );
+      editor.selection = selection;
+      editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+    } catch (err) {
+      console.error('reveal failed:', err);
+    }
   }
 
   /**
