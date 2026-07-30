@@ -121,6 +121,7 @@ Manual testing: open `examples/petstore.yaml` in the Extension Development Host.
 - HTTP method colors: GET=#61affe, POST=#49cc90, PUT=#fca130, DELETE=#f93e3e, PATCH=#50e3c2 (defined in `webview/utils/constants.ts`)
 - Component props use explicit interface types, not inline
 - Schema depth capped at 3 in visual editor — data below depth 3 passes through unchanged on save
+- **Editors must spread, never replace.** Every `onChange` writes `{...existing, field}` — the visual editor models only a subset of OpenAPI, so replacing an object wholesale silently deletes the keys it does not render (`x-*` extensions, `example`/`examples`, `encoding`, `style`, `explode`, …). This is the most common source of data-loss bugs here; it has bitten `ContentBodyEditor` (media-type siblings) and the security-scheme type switch
 
 ## License
 
