@@ -5,7 +5,10 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 ## Features
 
 - **Visual endpoint editor** — add, edit, and delete API endpoints via a tabbed UI (General, Parameters, Request Body, Responses, Examples, Security)
-- **Sidebar navigation** — browse and filter all endpoints with color-coded HTTP method badges (GET, POST, PUT, DELETE, PATCH, etc.)
+- **Sidebar navigation** — two tabs (Endpoints and Components); browse and filter all endpoints with color-coded HTTP method badges (GET, POST, PUT, DELETE, PATCH, etc.)
+- **Components editor** — full visual editing for every reusable `components` category: schemas, security schemes (apiKey / http / OAuth2 with flows & scopes / OpenID Connect / mutual TLS), parameters, headers, responses, and request bodies — add, rename, delete, and edit each one
+- **`$ref` navigation** — click the `→` next to any internal `#/components/...` reference to jump straight to the referenced component
+- **Reveal in YAML** — the `{ } YAML` button on any endpoint or component opens the source file beside the editor and highlights the exact lines
 - **Info editor** — edit API title, version, description, and terms of service
 - **Parameter editor** — manage query, path, header, and cookie parameters with type, format, and required toggles
 - **Request body editor** — edit request bodies with multi-content-type support and full schema editing
@@ -15,7 +18,7 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 - **Security schemes** — toggle security requirements per endpoint
 - **Validation** — real-time OpenAPI linting via [Spectral](https://stoplight.io/open-source/spectral) (OAS ruleset + custom rules) with a collapsible diagnostics panel showing errors, warnings, and hints grouped by category
 - **Bidirectional sync** — changes in the visual editor update the YAML file and vice versa (debounced at 400ms)
-- **Format preservation** — minimal in-place patches via `yaml-diff-patch`; unchanged regions survive byte-identical; JSON files stay JSON
+- **Format preservation** — surgical byte-range splicing means only the nodes you edited change; every untouched line (including 1000+ character single-line strings) survives byte-identical, and saving without changes never rewrites the file; JSON files stay JSON
 - **File watcher** — external changes to the file are detected and reflected in the editor
 - **VS Code theme integration** — fully respects your current VS Code color theme (light and dark)
 
@@ -55,9 +58,11 @@ Then install the `.vsix` file via `code --install-extension openapi-visual-edito
 
 ## Known Limitations
 
-- **YAML comments are not preserved.** `js-yaml` does not support round-tripping comments, and `yaml-diff-patch` inherits this limitation. Comments in untouched sections survive because the surrounding text is left verbatim, but comments inside a modified sub-tree are discarded when that sub-tree is re-serialized.
-- **YAML anchors and aliases (`&`, `*`) are not preserved.** `js-yaml`'s `dump` is invoked with `noRefs: true`; OpenAPI conventionally uses JSON `$ref` instead, so this is rarely a concern.
-- **Non-standard indentation is normalized to 2 spaces on modification.** A file authored with 4-space indentation round-trips byte-identically when untouched, but any modification causes `yaml-diff-patch` to re-emit the affected region using `js-yaml`'s default 2-space indent.
+- **Edits are surgical.** Saving a document applies a byte-range splice that touches only the modified nodes: untouched lines — including very long single-line strings, quoting styles, and comments outside the edited region — survive verbatim. When an edit cannot be applied surgically with full confidence, the editor falls back to a whole-document re-emit; in that (rare) case the notes below apply.
+- **Fallback only — YAML comments inside a modified sub-tree are discarded**, and long lines may be re-wrapped/re-styled. Comments and formatting in untouched sections always survive.
+- **YAML anchors and aliases (`&`, `*`) are not preserved** when a document is re-serialized from scratch (`noRefs: true`); OpenAPI conventionally uses JSON `$ref` instead, so this is rarely a concern.
+- **Fallback only — non-standard indentation is normalized to 2 spaces** in the re-emitted region.
+- **Integer values above 2^53 lose precision.** Because values cross a JSON boundary between the extension host and the webview (and JavaScript numbers are IEEE-754 doubles), an `example`/`default` such as `123456789012345678` is rounded to `123456789012345680`. Keep very large integer literals as quoted strings if exact precision matters.
 - Only OpenAPI 3.x is fully supported. Swagger 2.0 may partially work.
 - `$ref` references are displayed and selectable but not yet resolved inline.
 - Schema nesting is capped at depth 3 in the visual editor to prevent infinite recursion; data below that depth is passed through unchanged on save.

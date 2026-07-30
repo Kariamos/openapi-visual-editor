@@ -172,6 +172,7 @@ interface EndpointEditorProps {
   availableRefs?: string[];
   components?: Record<string, OpenApiSchema>;
   servers?: Array<{ url: string; description?: string }>;
+  onReveal?: () => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -188,6 +189,7 @@ export function EndpointEditor({
   availableRefs = [],
   components = {},
   servers = [],
+  onReveal,
 }: EndpointEditorProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState("general");
   const [editingPath, setEditingPath] = useState(false);
@@ -419,6 +421,26 @@ export function EndpointEditor({
           >
             {path}
           </span>
+        )}
+        {onReveal && (
+          <button
+            style={{
+              background: "transparent",
+              color: "var(--vscode-textLink-foreground, #3794ff)",
+              border: "1px solid var(--vscode-widget-border, #444)",
+              borderRadius: 3,
+              padding: "2px 8px",
+              fontSize: "11px",
+              cursor: "pointer",
+              flexShrink: 0,
+              marginLeft: "auto",
+              fontFamily: "var(--vscode-editor-font-family, monospace)",
+            }}
+            onClick={onReveal}
+            title="Show in YAML source"
+          >
+            {'{ }'} YAML
+          </button>
         )}
       </div>
 

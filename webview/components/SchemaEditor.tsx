@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import type { OpenApiSchema } from '../App';
+import React, { useState, useEffect, useContext, createContext } from 'react';
+import type { OpenApiSchema, OpenApiMediaType } from '../App';
 import { JsonSchemaEditor } from './JsonSchemaEditor';
+
+/**
+ * Optional navigation callback for internal $ref pointers. Provided by App so
+ * that any nested SchemaEditor (recursion, compositions, content bodies) can
+ * offer "go to definition" without threading a prop through every level.
+ */
+export const RefNavigationContext = createContext<((ref: string) => void) | null>(null);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -487,6 +494,7 @@ export function SchemaEditor({
 }): React.ReactElement {
   const displayType = getDisplayType(schema);
   const allowedTypes = depth >= 3 ? LEAF_TYPES : ALL_TYPES;
+  const navigateRef = useContext(RefNavigationContext);
 
   const setType = (t: string) => {
     const next = initSchema(t, availableRefs);
@@ -507,25 +515,41 @@ export function SchemaEditor({
 
         {/* $ref selector */}
         {displayType === '$ref' && (
-          <div style={{ flex: 1 }}>
-            <label style={ms.label}>Reference</label>
-            {availableRefs.length > 0 ? (
-              <select
-                style={{ ...ms.select, width: '100%' }}
-                value={schema.$ref ?? ''}
-                onChange={e => onChange({ $ref: e.target.value })}
+          <div style={{ flex: 1, display: 'flex', gap: 4, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={ms.label}>Reference</label>
+              {availableRefs.length > 0 ? (
+                <select
+                  style={{ ...ms.select, width: '100%' }}
+                  value={schema.$ref ?? ''}
+                  onChange={e => onChange({ $ref: e.target.value })}
+                >
+                  {availableRefs.map(r => (
+                    <option key={r} value={r}>{r.replace('#/components/', '')}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  style={ms.input}
+                  value={schema.$ref ?? ''}
+                  onChange={e => onChange({ $ref: e.target.value })}
+                  placeholder="#/components/schemas/MyModel"
+                />
+              )}
+            </div>
+            {navigateRef && schema.$ref?.startsWith('#/components/') && (
+              <button
+                style={{
+                  ...ms.select,
+                  cursor: 'pointer',
+                  color: 'var(--vscode-textLink-foreground, #3794ff)',
+                  flexShrink: 0,
+                }}
+                onClick={() => navigateRef(schema.$ref!)}
+                title={`Go to ${schema.$ref}`}
               >
-                {availableRefs.map(r => (
-                  <option key={r} value={r}>{r.replace('#/components/', '')}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                style={ms.input}
-                value={schema.$ref ?? ''}
-                onChange={e => onChange({ $ref: e.target.value })}
-                placeholder="#/components/schemas/MyModel"
-              />
+                →
+              </button>
             )}
           </div>
         )}
@@ -1187,8 +1211,8 @@ export function ContentBodyEditor({
   onChange,
   availableRefs,
 }: {
-  content: Record<string, { schema?: OpenApiSchema }>;
-  onChange: (c: Record<string, { schema?: OpenApiSchema }>) => void;
+  content: Record<string, OpenApiMediaType>;
+  onChange: (c: Record<string, OpenApiMediaType>) => void;
   availableRefs: string[];
 }): React.ReactElement {
   const types = Object.keys(content);
@@ -1219,6 +1243,16 @@ export function ContentBodyEditor({
   };
 
   const unused = COMMON_CONTENT_TYPES.filter(ct => !(ct in content));
+
+  /**
+   * Replaces only the `schema` of the active media type. Spreading the existing
+   * media-type object is essential: it carries sibling keys the visual editor
+   * does not model (`example`, `examples`, `encoding`, `x-*`) which would
+   * otherwise be silently dropped from the document on every schema edit.
+   */
+  const setSchema = (schema: OpenApiSchema) => {
+    onChange({ ...content, [current]: { ...content[current], schema } });
+  };
 
   return (
     <div>
@@ -1268,19 +1302,19 @@ export function ContentBodyEditor({
         <>
           <SchemaEditor
             schema={content[current].schema ?? { type: 'object', properties: {} }}
-            onChange={schema => onChange({ ...content, [current]: { schema } })}
+            onChange={schema => setSchema(schema)}
             availableRefs={availableRefs}
             depth={0}
           />
           {showJson && (
             <JsonSchemaEditor
               schema={content[current].schema ?? { type: 'object', properties: {} }}
-              onChange={schema => onChange({ ...content, [current]: { schema } })}
+              onChange={schema => setSchema(schema)}
             />
           )}
           <div style={{ marginTop: 10, borderTop: '1px solid var(--vscode-widget-border, #2d2d2d)', paddingTop: 10 }}>
             <PasteJsonExample
-              onGenerate={schema => onChange({ ...content, [current]: { schema } })}
+              onGenerate={schema => setSchema(schema)}
             />
           </div>
         </>

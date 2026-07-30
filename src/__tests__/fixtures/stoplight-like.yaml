@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  contact:
+    email: dev@sample.test
+    name: Developers
+    url: 'https://sample.test/'
+  description: A synthetic fixture reproducing the formatting quirks of Stoplight Studio exports, used to verify that visual edits never reformat untouched regions of large real-world files. This single-line description is intentionally long so that any serializer configured with a default line width of eighty columns would want to fold it across several lines, which must never happen to untouched content.
+  termsOfService: 'https://sample.test/terms-and-conditions/'
+  title: SampleApi
+  version: '1.0'
+servers:
+  - url: 'https://api.sample.test'
+paths:
+  /:
+    get:
+      operationId: get-root
+      summary: Get API description
+      description: Get all routes available for this apis
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+        '500':
+          $ref: '#/components/responses/Error'
+    parameters: []
+  /widgets:
+    get:
+      operationId: get-widgets
+      summary: List widgets
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - name: filterBy
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - name
+              - status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Widget'
+              examples:
+                short:
+                  value:
+                    - id: 1
+                      name: First widget
+                complete:
+                  value:
+                    - id: 1
+                      name: First widget
+                      status:
+                        id: 1
+                        name: to do
+                      steps: "1. Open the panel\r\n2. Follow the on-screen wizard to create the \"Premium\" widget entering all the required details and then wait for the long background job to finish before checking the result list again\r\n3. Verify"
+                      note: 'The creation timestamp looks like ''Tue Dec 06 2022 08:06:30 GMT+0000 (Coordinated Universal Time)'' and is kept verbatim as a single-quoted scalar spanning well past eighty columns to trip naive re-wrapping'
+        '500':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: post-widgets
+      summary: Create a widget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status_id:
+                  type: integer
+      responses:
+        '201':
+          description: Created
+        '500':
+          $ref: '#/components/responses/Error'
+  '/widgets/{wid}':
+    parameters:
+      - name: wid
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: get-widget
+      summary: Get a single widget with a very long single-line summary that a default eighty column serializer would definitely fold onto multiple lines breaking the byte-identity of this untouched region
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+        '404':
+          description: Not found
+tags:
+  - name: widgets
+  - name: reports
+components:
+  parameters:
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 10
+  responses:
+    Error:
+      description: An error occurred
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      title: Error
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+    Widget:
+      title: Widget
+      type: object
+      description: 'A widget object as returned by the listing endpoints; every field mirrors the formatting habits of generator tools: quoted scalars, deep nesting and long single lines'
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        status:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        media:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+              mime_type:
+                type: string
+      required:
+        - id
+        - name
