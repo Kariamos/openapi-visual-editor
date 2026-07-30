@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
-import type { OpenApiSchema } from '../App';
+import type { OpenApiSchema, OpenApiMediaType } from '../App';
 import { JsonSchemaEditor } from './JsonSchemaEditor';
 
 /**
@@ -1211,8 +1211,8 @@ export function ContentBodyEditor({
   onChange,
   availableRefs,
 }: {
-  content: Record<string, { schema?: OpenApiSchema }>;
-  onChange: (c: Record<string, { schema?: OpenApiSchema }>) => void;
+  content: Record<string, OpenApiMediaType>;
+  onChange: (c: Record<string, OpenApiMediaType>) => void;
   availableRefs: string[];
 }): React.ReactElement {
   const types = Object.keys(content);
@@ -1243,6 +1243,16 @@ export function ContentBodyEditor({
   };
 
   const unused = COMMON_CONTENT_TYPES.filter(ct => !(ct in content));
+
+  /**
+   * Replaces only the `schema` of the active media type. Spreading the existing
+   * media-type object is essential: it carries sibling keys the visual editor
+   * does not model (`example`, `examples`, `encoding`, `x-*`) which would
+   * otherwise be silently dropped from the document on every schema edit.
+   */
+  const setSchema = (schema: OpenApiSchema) => {
+    onChange({ ...content, [current]: { ...content[current], schema } });
+  };
 
   return (
     <div>
@@ -1292,19 +1302,19 @@ export function ContentBodyEditor({
         <>
           <SchemaEditor
             schema={content[current].schema ?? { type: 'object', properties: {} }}
-            onChange={schema => onChange({ ...content, [current]: { schema } })}
+            onChange={schema => setSchema(schema)}
             availableRefs={availableRefs}
             depth={0}
           />
           {showJson && (
             <JsonSchemaEditor
               schema={content[current].schema ?? { type: 'object', properties: {} }}
-              onChange={schema => onChange({ ...content, [current]: { schema } })}
+              onChange={schema => setSchema(schema)}
             />
           )}
           <div style={{ marginTop: 10, borderTop: '1px solid var(--vscode-widget-border, #2d2d2d)', paddingTop: 10 }}>
             <PasteJsonExample
-              onGenerate={schema => onChange({ ...content, [current]: { schema } })}
+              onGenerate={schema => setSchema(schema)}
             />
           </div>
         </>

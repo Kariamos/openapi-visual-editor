@@ -7,6 +7,7 @@ import { ModelsEditor } from './components/ModelsEditor';
 import {
   ComponentsEditor,
   COMPONENT_CATEGORIES,
+  CATEGORY_SINGULAR,
   type ComponentCategory,
 } from './components/ComponentsEditor';
 import { RefNavigationContext } from './components/SchemaEditor';
@@ -550,7 +551,7 @@ export function App(): React.ReactElement {
     (category: ComponentCategory) => {
       if (!doc) { return; }
       const existing = (doc.components?.[category] ?? {}) as Record<string, unknown>;
-      const newName = getUniqueName('New' + category.charAt(0).toUpperCase() + category.slice(1, -1), existing);
+      const newName = getUniqueName('New' + CATEGORY_SINGULAR[category], existing);
       const skeleton: Record<ComponentCategory, unknown> = {
         securitySchemes: { type: 'http', scheme: 'bearer' },
         parameters: { name: 'param', in: 'query', required: false, schema: { type: 'string' } },
@@ -771,8 +772,9 @@ export function App(): React.ReactElement {
                 availableRefs={schemaRefs}
                 onReveal={() => handleReveal(['components', 'schemas', selectedModel])}
               />
-            ) : selectedComponent && currentComponentValue !== undefined ? (
+            ) : selectedComponent && isEditableComponent(currentComponentValue) ? (
               <ComponentsEditor
+                key={`${selectedComponent.category}/${selectedComponent.name}`}
                 category={selectedComponent.category}
                 name={selectedComponent.name}
                 value={currentComponentValue as Record<string, unknown>}
@@ -814,6 +816,15 @@ function getUniquePath(base: string, existingPaths: OpenApiPaths): string {
     counter++;
   }
   return `${base}-${counter}`;
+}
+
+/**
+ * A component entry is only editable when it is a real object. A half-written
+ * spec can yield `null` (e.g. `parameters:\n  Foo:` with no body); rendering the
+ * form editor against it would throw and blank out the whole webview.
+ */
+function isEditableComponent(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function getUniqueName(base: string, existing: Record<string, unknown>): string {

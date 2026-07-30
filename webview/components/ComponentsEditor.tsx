@@ -19,6 +19,15 @@ export const COMPONENT_CATEGORIES: ComponentCategory[] = [
   'requestBodies',
 ];
 
+/** Singular PascalCase names, used for generated defaults and headings. */
+export const CATEGORY_SINGULAR: Record<ComponentCategory, string> = {
+  securitySchemes: 'SecurityScheme',
+  parameters: 'Parameter',
+  responses: 'Response',
+  headers: 'Header',
+  requestBodies: 'RequestBody',
+};
+
 export const CATEGORY_LABELS: Record<ComponentCategory, string> = {
   securitySchemes: 'Security Schemes',
   parameters: 'Parameters',
@@ -328,7 +337,16 @@ function OAuthFlowEditor({
       ))}
       <button
         style={styles.addBtn}
-        onClick={() => setScopes([...scopeEntries, ['', '']] as Array<[string, string]>)}
+        onClick={() => {
+          // Scopes live in a keyed object, so two blank keys would collapse into
+          // a single row. Seed each new scope with a unique placeholder name.
+          let candidate = 'newScope';
+          let n = 2;
+          while (scopeEntries.some(([k]) => k === candidate)) {
+            candidate = `newScope${n++}`;
+          }
+          setScopes([...scopeEntries, [candidate, '']] as Array<[string, string]>);
+        }}
       >
         + Add scope
       </button>
@@ -357,9 +375,13 @@ function SecuritySchemeEditor({
             value={type}
             onChange={(e) => {
               const t = e.target.value;
-              // Keep description; reset type-specific fields to a sane skeleton.
-              const base: AnyComponent = { type: t };
-              if (value.description) base.description = value.description;
+              // Drop only the keys that belong to the PREVIOUS type; everything
+              // else (description, x-* extensions, unmodelled keys) is kept so
+              // switching type never silently deletes data from the document.
+              const base: AnyComponent = { ...value, type: t };
+              for (const k of ['name', 'in', 'scheme', 'bearerFormat', 'flows', 'openIdConnectUrl']) {
+                delete base[k];
+              }
               if (t === 'apiKey') Object.assign(base, { name: 'X-Api-Key', in: 'header' });
               if (t === 'http') Object.assign(base, { scheme: 'bearer' });
               if (t === 'oauth2') Object.assign(base, { flows: {} });
@@ -412,7 +434,12 @@ function SecuritySchemeEditor({
               value={(value.scheme as string) ?? 'bearer'}
               onChange={(e) => onChange({ ...value, scheme: e.target.value })}
             >
-              {['bearer', 'basic', 'digest'].map((s) => (
+              {/* Include the current value when it is not one of the common
+                  schemes (e.g. "negotiate"), otherwise the select would display
+                  a different scheme than the document actually contains. */}
+              {Array.from(
+                new Set([...(value.scheme ? [value.scheme as string] : []), 'bearer', 'basic', 'digest'])
+              ).map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -492,6 +519,13 @@ function ParameterComponentEditor({
   availableRefs: string[];
   isHeader: boolean;
 }): React.ReactElement {
+  const contentMap = value.content as Record<string, OpenApiMediaType> | undefined;
+  const usesContent =
+    value.schema === undefined &&
+    contentMap != null &&
+    typeof contentMap === 'object' &&
+    Object.keys(contentMap).length > 0;
+
   return (
     <div>
       <div style={styles.row}>
@@ -542,13 +576,30 @@ function ParameterComponentEditor({
           onChange={(v) => onChange({ ...value, description: v || undefined })}
         />
       </div>
-      <div style={styles.sectionHeader}>Schema</div>
-      <SchemaEditor
-        schema={(value.schema as OpenApiSchema) ?? { type: 'string' }}
-        onChange={(schema) => onChange({ ...value, schema })}
-        availableRefs={availableRefs}
-        depth={0}
-      />
+      {/* A parameter/header carries EITHER `schema` OR `content` — they are
+          mutually exclusive per the OpenAPI spec. Editing a content-based
+          parameter through the schema editor would write an invalid sibling
+          `schema` key, so route it to the content editor instead. */}
+      {usesContent ? (
+        <>
+          <div style={styles.sectionHeader}>Content</div>
+          <ContentBodyEditor
+            content={value.content as Record<string, OpenApiMediaType>}
+            onChange={(content) => onChange({ ...value, content })}
+            availableRefs={availableRefs}
+          />
+        </>
+      ) : (
+        <>
+          <div style={styles.sectionHeader}>Schema</div>
+          <SchemaEditor
+            schema={(value.schema as OpenApiSchema) ?? { type: 'string' }}
+            onChange={(schema) => onChange({ ...value, schema })}
+            availableRefs={availableRefs}
+            depth={0}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -589,7 +640,7 @@ function ResponseComponentEditor({
       <div style={styles.sectionHeader}>Content</div>
       {hasContent ? (
         <ContentBodyEditor
-          content={content as Record<string, { schema?: OpenApiSchema }>}
+          content={content}
           onChange={(c) => onChange({ ...value, content: c })}
           availableRefs={availableRefs}
         />
@@ -650,7 +701,7 @@ export function ComponentsEditor({
   return (
     <div>
       <div style={styles.header}>
-        <span style={styles.label}>{CATEGORY_LABELS[category].replace(/s$/, '')}</span>
+        <span style={styles.label}>{CATEGORY_SINGULAR[category]}</span>
         {editing ? (
           <input
             autoFocus

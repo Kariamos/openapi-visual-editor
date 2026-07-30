@@ -4,6 +4,7 @@ import { METHOD_COLORS, HTTP_METHODS } from "../utils/constants";
 import {
   COMPONENT_CATEGORIES,
   CATEGORY_LABELS,
+  CATEGORY_SINGULAR,
   type ComponentCategory,
 } from "./ComponentsEditor";
 
@@ -484,7 +485,7 @@ export function Sidebar({
                   <button
                     style={styles.sectionAddBtn}
                     onClick={() => onAddComponent(category)}
-                    title={`Add ${CATEGORY_LABELS[category].replace(/s$/, '').toLowerCase()}`}
+                    title={`Add ${CATEGORY_SINGULAR[category].toLowerCase()}`}
                   >
                     +
                   </button>
@@ -492,10 +493,7 @@ export function Sidebar({
                 {visibleNames.map((name) =>
                   renderListItem({
                     key: `${category}:${name}`,
-                    badge: CATEGORY_LABELS[category]
-                      .replace(/s$/, '')
-                      .toUpperCase()
-                      .slice(0, 6),
+                    badge: CATEGORY_SINGULAR[category].toUpperCase().slice(0, 6),
                     badgeColor: 'var(--vscode-badge-background, #4d4d4d)',
                     label: name,
                     selected:
