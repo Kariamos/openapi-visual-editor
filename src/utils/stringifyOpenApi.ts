@@ -59,9 +59,14 @@ export function stringifyOpenApiPreservingSource(
   const patched = yamlOverwrite(source, doc as Record<string, unknown>);
   if (patched === source) return source;
   // yaml-diff-patch serializes with lineWidth:80, which inserts unwanted line
-  // breaks into long strings. Re-emit with lineWidth:0 to remove them, then
-  // restore the original line-ending style.
+  // breaks into long strings. Re-emit without wrapping, then restore the
+  // original line-ending style. doubleQuotedMinMultiLineLength is raised so a
+  // double-quoted scalar containing `\r\n` escapes stays on one line instead of
+  // being folded into a multi-line block (see EMIT_OPTS in yamlSurgicalPatch).
   const usesCRLF = source.includes('\r\n');
-  const fixed = parseDocument(patched).toString({ lineWidth: 0 });
+  const fixed = parseDocument(patched).toString({
+    lineWidth: 0,
+    doubleQuotedMinMultiLineLength: Number.MAX_SAFE_INTEGER,
+  });
   return usesCRLF ? fixed.replace(/\n/g, '\r\n') : fixed;
 }
