@@ -235,3 +235,71 @@ b:
     ).toBeNull();
   });
 });
+
+describe('Escaped newlines stay on a single line', () => {
+  // A double-quoted scalar carrying \r\n escapes must not be re-emitted as a
+  // folded multi-line block. eemeli does that by default for any such string
+  // longer than doubleQuotedMinMultiLineLength (40); the emitters raise it.
+  const ESCAPED = `openapi: 3.0.3
+info:
+  title: API
+  version: '1.0'
+paths:
+  /token:
+    post:
+      summary: Token
+      description: "Exchanges authorization code for tokens.\\r\\nSupports three grant types:\\r\\n1. **authorization_code** - Exchange code for tokens\\r\\n2. **refresh_token** - Refresh expired access token\\r\\n\\r\\n**PKCE Flow:**\\r\\n- Provide \`code_verifier\` instead of \`client_secret\`"
+components:
+  schemas:
+    Keep:
+      only: 1
+`;
+
+  /** The description must occupy exactly one physical line. */
+  const descriptionLines = (yaml: string) =>
+    yaml.split('\n').filter((l) => l.includes('description:'));
+
+  it('an unrelated edit leaves the escaped string byte-identical', () => {
+    const out = pipeline(ESCAPED, (d) => {
+      d.info.title = 'Edited';
+    });
+    const original = ESCAPED.split('\n').find((l) => l.includes('description:'))!;
+    expect(out).toContain(original);
+    expect(descriptionLines(out)).toHaveLength(1);
+  });
+
+  it('editing the escaped string itself keeps it on one line', () => {
+    const out = pipeline(ESCAPED, (d) => {
+      d.paths['/token'].post.description = 'First line.\r\nSecond line.\r\n\r\nAfter a blank line.';
+    });
+    const lines = descriptionLines(out);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('\\r\\n');
+    // No folded continuation lines were introduced.
+    expect(out.split('\n').length).toBe(ESCAPED.split('\n').length);
+    // Round-trips to exactly the intended value.
+    expect(
+      (parseOpenApi(out).paths!['/token']!.post as any).description
+    ).toBe('First line.\r\nSecond line.\r\n\r\nAfter a blank line.');
+  });
+
+  it('the whole-document fallback path also keeps it on one line', () => {
+    // Removing the only key of a map is a case the surgical patcher refuses,
+    // so this exercises the yaml-diff-patch fallback (which re-emits the file).
+    const doc = parseOpenApi(ESCAPED);
+    const w = JSON.parse(JSON.stringify(doc)) as Record<string, any>;
+    delete w.components.schemas.Keep.only;
+    const out = stringifyOpenApiPreservingSource(ESCAPED, w as never);
+    expect(descriptionLines(out)).toHaveLength(1);
+    expect(descriptionLines(out)[0]).toContain('\\r\\n');
+  });
+
+  it('applyJsonPatchToYamlSource splices such a value inline', () => {
+    const out = applyJsonPatchToYamlSource(ESCAPED, [
+      { op: 'replace', path: '/paths/~1token/post/description', value: 'a\r\nb' },
+    ]);
+    expect(out).not.toBeNull();
+    expect(descriptionLines(out!)).toHaveLength(1);
+    expect(out!).toContain('description: "a\\r\\nb"');
+  });
+});

@@ -88,19 +88,39 @@ function reindent(block: string, indent: number, eol: string): string {
     .join(eol);
 }
 
+/**
+ * Emitter options shared by every write path.
+ *
+ * `lineWidth: 0` disables width-based wrapping, but on its own it does NOT stop
+ * a double-quoted scalar that contains newlines from being split across lines:
+ * that is governed by `doubleQuotedMinMultiLineLength` (default 40). Without
+ * raising it, a value written as
+ *
+ *     description: "First line.\r\nSecond line."
+ *
+ * comes back as a folded multi-line block with a literal `\r` at each line end
+ * and blank continuation lines. It round-trips to the same string, but it churns
+ * the file and is far less readable, so keep such scalars on a single line.
+ */
+const EMIT_OPTS = {
+  lineWidth: 0,
+  indent: 2,
+  doubleQuotedMinMultiLineLength: Number.MAX_SAFE_INTEGER,
+} as const;
+
 /** Emit a single value as YAML (no wrapping, 2-space indent). */
 function emitValue(value: unknown): string {
-  return yamlStringify(value, { lineWidth: 0, indent: 2 });
+  return yamlStringify(value, EMIT_OPTS);
 }
 
 /** Emit `key: value` as a standalone YAML block. */
 function emitPair(key: string, value: unknown): string {
-  return yamlStringify({ [key]: value }, { lineWidth: 0, indent: 2 });
+  return yamlStringify({ [key]: value }, EMIT_OPTS);
 }
 
 /** Emit `- value` as a standalone YAML sequence-item block. */
 function emitSeqItem(value: unknown): string {
-  return yamlStringify([value], { lineWidth: 0, indent: 2 });
+  return yamlStringify([value], EMIT_OPTS);
 }
 
 /** True when the emitted YAML for a scalar fits inline on one line. */
