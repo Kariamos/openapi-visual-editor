@@ -53,7 +53,7 @@ npm run compile         # tsc → out/
 - `webview/components/Sidebar.tsx` → two tabs: **Endpoints** (list, filter, sort, add/delete) and **Components** (grouped sections: Schemas + securitySchemes/parameters/responses/headers/requestBodies, each with add/delete + a `{ }` reveal button)
 - `webview/components/InfoEditor.tsx` → API info form (title, version, description, termsOfService)
 - `webview/components/EndpointEditor.tsx` → tabbed editor (General, Parameters, Request Body, Responses, Examples, Security); header has a `{ } YAML` reveal button
-- `webview/components/SchemaEditor.tsx` → recursive JSON Schema editor (primitives, objects, arrays, `$ref`, `allOf`/`oneOf`/`anyOf`/`not`), depth-capped at 3; exports `RefNavigationContext` and renders a `→` go-to-definition button next to any internal `$ref`
+- `webview/components/SchemaEditor.tsx` → recursive JSON Schema editor (primitives, objects, arrays, `$ref`, `allOf`/`oneOf`/`anyOf`/`not`), depth-capped at 3; exports `RefNavigationContext` and renders a `→` go-to-definition button next to any internal `$ref`. Each `PropertyRow` advertises what expanding reveals — see `expandSummary()`, which returns the chip label (`enum 3`, `example`, `default`, or the faint `enum · example · rules` prompt) and whether the property already holds that data; complex types return `null` because the description slot already prints `4 props` / `allOf (2 schemas)`, and `$ref` rows return `null` because they have no panel at all (their toggle is hidden rather than dead)
 - `webview/components/JsonSchemaEditor.tsx` → single-item primitive schema editor (string, integer, boolean, etc.) used inside SchemaEditor
 - `webview/components/ExamplesEditor.tsx` → example management, auto-generation from schema, curl/fetch snippet modal
 - `webview/components/ModelsEditor.tsx` → editor for `components/schemas` (the Schemas section): add/rename/delete schemas, edit via SchemaEditor
@@ -117,7 +117,7 @@ Manual testing: open `examples/petstore.yaml` in the Extension Development Host.
 
 ## Conventions
 
-- All styles are inline objects (no CSS modules, no styled-components)
+- All styles are inline objects (no CSS modules, no styled-components) — so `:hover`/`:focus` do not exist: interactive affordances need `onMouseEnter`/`onMouseLeave` state (see `PropertyRow`'s `rowHover`/`chevronHover`, `Sidebar`'s `hoveredItem`). Motion is gated on the module-level `REDUCED_MOTION` check since media queries are unavailable too
 - VS Code CSS variables used throughout for theme integration (e.g. `var(--vscode-input-background)`)
 - HTTP method colors: GET=#61affe, POST=#49cc90, PUT=#fca130, DELETE=#f93e3e, PATCH=#50e3c2 (defined in `webview/utils/constants.ts`)
 - Component props use explicit interface types, not inline

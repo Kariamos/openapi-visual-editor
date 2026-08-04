@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, createContext } from 'react';
+import React, { useState, useEffect, useContext, useId, createContext } from 'react';
 import type { OpenApiSchema, OpenApiMediaType } from '../App';
 import { JsonSchemaEditor } from './JsonSchemaEditor';
 
@@ -64,6 +64,55 @@ function isComplex(displayType: string): boolean {
   return ['object', 'array', 'allOf', 'oneOf', 'anyOf', 'not'].includes(displayType);
 }
 
+/** Honour the OS "reduce motion" setting for the chevron/​chip transitions. */
+const REDUCED_MOTION =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+export interface ExpandSummary {
+  label: string;
+  /** True when the property already holds the data the panel edits. */
+  filled: boolean;
+  title: string;
+}
+
+/**
+ * Describes what expanding a property row reveals, so the row can advertise it
+ * instead of hiding everything behind a bare arrow.
+ *
+ * Returns null when there is nothing to expand (a `$ref` has no inline body) or
+ * when the row already prints its own summary — complex types show "4 props" /
+ * "allOf (2 schemas)" in the description slot, and repeating that would be noise.
+ */
+export function expandSummary(
+  schema: OpenApiSchema,
+  displayType: string
+): ExpandSummary | null {
+  if (displayType === '$ref' || isComplex(displayType)) return null;
+
+  const enumValues = Array.isArray(schema.enum) ? schema.enum : [];
+  if (enumValues.length > 0) {
+    return {
+      label: `enum ${enumValues.length}`,
+      filled: true,
+      title: `${enumValues.length} enum value${enumValues.length === 1 ? '' : 's'} — click to edit`,
+    };
+  }
+  const has = (v: unknown) => v !== undefined && v !== null && v !== '';
+  if (has(schema.example)) {
+    return { label: 'example', filled: true, title: 'Has an example — click to edit' };
+  }
+  if (has(schema.default)) {
+    return { label: 'default', filled: true, title: 'Has a default — click to edit' };
+  }
+  return {
+    label: 'enum · example · rules',
+    filled: false,
+    title: 'Add enum values, an example, a default or validation rules',
+  };
+}
+
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const ms = {
@@ -116,16 +165,39 @@ const ms = {
     flexShrink: 0 as const,
   },
   expandBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 22,
+    height: 22,
     background: 'transparent',
-    color: 'var(--vscode-foreground, #ccc)',
     border: 'none',
+    borderRadius: 4,
     cursor: 'pointer',
-    fontSize: '13px',
-    padding: '2px',
-    width: 20,
+    padding: 0,
     flexShrink: 0 as const,
     lineHeight: 1,
-    textAlign: 'center' as const,
+    transition: REDUCED_MOTION ? 'none' : 'background-color 120ms ease, color 120ms ease',
+  },
+  /** Keeps rows aligned when a row has nothing to expand (e.g. a `$ref`). */
+  expandSpacer: {
+    width: 22,
+    flexShrink: 0 as const,
+  },
+  /** Trailing chip that names what the expanded panel contains. */
+  hintChip: {
+    flexShrink: 0 as const,
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: 'transparent',
+    borderRadius: 10,
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontFamily: 'inherit',
+    lineHeight: 1.4,
+    padding: '1px 6px',
+    whiteSpace: 'nowrap' as const,
+    transition: REDUCED_MOTION ? 'none' : 'opacity 120ms ease, color 120ms ease',
   },
   propRow: {
     display: 'flex',
@@ -856,11 +928,18 @@ function PropertyRow({
   depth: number;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
+  const [rowHover, setRowHover] = useState(false);
+  const [chevronHover, setChevronHover] = useState(false);
   const [localName, setLocalName] = useState(name);
+  const panelId = useId();
   const displayType = getDisplayType(schema);
   const complex = isComplex(displayType);
   const isPrimitive = !complex && displayType !== '$ref';
   const childTypes = depth >= 2 ? LEAF_TYPES : ALL_TYPES;
+  // A $ref row renders no panel, so it must not offer a toggle that does nothing.
+  const hasExpandable = complex || isPrimitive;
+  const summary = expandSummary(schema, displayType);
+  const toggle = () => setExpanded(e => !e);
 
   useEffect(() => { setLocalName(name); }, [name]);
 
@@ -878,15 +957,55 @@ function PropertyRow({
 
   return (
     <div>
-      <div style={ms.propRow}>
-        {/* Expand toggle — visible for all types (complex for nesting, primitive for enum/example) */}
-        <button
-          style={ms.expandBtn}
-          onClick={() => setExpanded(e => !e)}
-          title={expanded ? 'Collapse' : 'Expand'}
-        >
-          {expanded ? '▼' : '▶'}
-        </button>
+      <div
+        style={ms.propRow}
+        onMouseEnter={() => setRowHover(true)}
+        onMouseLeave={() => setRowHover(false)}
+      >
+        {/* Expand toggle — a real 22×22 hit target that lights up on hover and
+            rotates when open, so the row reads as a control rather than text. */}
+        {hasExpandable ? (
+          <button
+            style={{
+              ...ms.expandBtn,
+              background: chevronHover
+                ? 'var(--vscode-list-hoverBackground, #2a2d2e)'
+                : 'transparent',
+              color:
+                expanded || chevronHover
+                  ? 'var(--vscode-foreground, #ccc)'
+                  : 'var(--vscode-descriptionForeground, #9d9d9d)',
+            }}
+            onClick={toggle}
+            onMouseEnter={() => setChevronHover(true)}
+            onMouseLeave={() => setChevronHover(false)}
+            aria-expanded={expanded}
+            aria-controls={panelId}
+            title={expanded ? 'Collapse' : 'Expand'}
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              aria-hidden="true"
+              style={{
+                transform: expanded ? 'rotate(90deg)' : 'none',
+                transition: REDUCED_MOTION ? 'none' : 'transform 150ms ease',
+              }}
+            >
+              <path
+                d="M3 1.5 L7 5 L3 8.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        ) : (
+          <span style={ms.expandSpacer} />
+        )}
 
         {/* Name */}
         <input
@@ -958,6 +1077,29 @@ function PropertyRow({
           </>
         )}
 
+        {/* What's behind the toggle. When the property already carries enum /
+            example / default the chip shows the value count and stays visible,
+            so a long list reveals at a glance which fields hold hidden data.
+            When empty it is a faint prompt that only comes forward on hover. */}
+        {summary && (
+          <button
+            style={{
+              ...ms.hintChip,
+              opacity: summary.filled || rowHover || expanded ? 1 : 0.5,
+              color: summary.filled
+                ? 'var(--vscode-textLink-foreground, #3794ff)'
+                : 'var(--vscode-descriptionForeground, #9d9d9d)',
+              border: `1px ${summary.filled ? 'solid' : 'dashed'} var(--vscode-widget-border, #444)`,
+            }}
+            onClick={toggle}
+            aria-expanded={expanded}
+            aria-controls={panelId}
+            title={summary.title}
+          >
+            {summary.label}
+          </button>
+        )}
+
         {/* Required */}
         <label
           title="Required"
@@ -977,7 +1119,7 @@ function PropertyRow({
 
       {/* Expanded: nested schema for complex types */}
       {expanded && complex && (
-        <div style={ms.nested}>
+        <div id={panelId} style={ms.nested}>
           {displayType === 'object' && (
             <ObjectPropertiesEditor
               schema={schema}
@@ -1022,7 +1164,7 @@ function PropertyRow({
 
       {/* Expanded: enum + example + default + constraints for primitive types */}
       {expanded && isPrimitive && (
-        <div style={ms.nested}>
+        <div id={panelId} style={ms.nested}>
           <EnumEditor
             values={schema.enum}
             onChange={values => onSchemaChange({ ...schema, enum: values.length > 0 ? values : undefined })}

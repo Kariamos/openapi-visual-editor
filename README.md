@@ -13,7 +13,7 @@ A VS Code extension that provides a full graphical editor for OpenAPI/Swagger YA
 - **Parameter editor** — manage query, path, header, and cookie parameters with type, format, and required toggles
 - **Request body editor** — edit request bodies with multi-content-type support and full schema editing
 - **Response editor** — add and edit response status codes, descriptions, and response body schemas
-- **Schema editor** — recursive visual editor for JSON Schema, supporting primitives, objects, arrays, `$ref`, and composition keywords (`allOf`, `oneOf`, `anyOf`, `not`)
+- **Schema editor** — recursive visual editor for JSON Schema, supporting primitives, objects, arrays, `$ref`, and composition keywords (`allOf`, `oneOf`, `anyOf`, `not`). Each property row says what it is hiding: a chip shows `enum 3` or `example` when the field already carries that data, so a long list reveals at a glance which properties have values behind the expander
 - **Examples editor** — manage request/response examples with auto-generation from schemas and curl/fetch snippet generation
 - **Security schemes** — toggle security requirements per endpoint
 - **Validation** — real-time OpenAPI linting via [Spectral](https://stoplight.io/open-source/spectral) (OAS ruleset + custom rules) with a collapsible diagnostics panel showing errors, warnings, and hints grouped by category
